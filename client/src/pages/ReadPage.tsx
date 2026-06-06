@@ -238,6 +238,7 @@ export default function ReadPage() {
       {selectedVerse && (
         <VerseActionBar
           bookId={chapter.book_id}
+          bookName={chapter.book_name_english}
           chapterNo={chapter.chapter_no}
           verseNo={selectedVerse}
           text={chapter.verses.find(v => v.verse_no === selectedVerse)?.text || ''}

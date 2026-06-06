@@ -21,6 +21,7 @@ app.use(express.urlencoded({ extended: true }))
 app.use('/health', require('./routes/health'))
 app.use('/api/bible', require('./routes/bible'))
 app.use('/api/voice', require('./routes/voice'))
+app.use('/api/contact', require('./routes/contact'))
 
 // 404
 app.use((req, res) => {

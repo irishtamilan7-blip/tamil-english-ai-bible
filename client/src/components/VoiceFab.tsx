@@ -30,7 +30,7 @@ export default function VoiceFab() {
   const [recording, setRecording] = useState(false)
   const [processing, setProcessing] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [suggestions, setSuggestions] = useState<ParseResult['top_matches']>(null)
+  const [suggestions, setSuggestions] = useState<ParseResult['top_matches']>(undefined)
   const mediaRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
   const navigate = useNavigate()
@@ -57,13 +57,13 @@ export default function VoiceFab() {
     const bookId = bookNameToId[key] || bookNameToId[result.book_name_english.toLowerCase()]
     if (!bookId) { setError(`Book "${result.book_name_english}" not found`); return }
     const path = `/read/${bookId}/${result.chapter_no}${result.verse_no ? `?verse=${result.verse_no}` : ''}`
-    setSuggestions(null)
+    setSuggestions(undefined)
     navigate(path)
   }
 
   async function startRecording() {
     setError(null)
-    setSuggestions(null)
+    setSuggestions(undefined)
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       chunksRef.current = []
@@ -142,7 +142,7 @@ export default function VoiceFab() {
         <div className="fixed bottom-24 right-4 z-50 bg-white rounded-xl shadow-xl border border-cream-300 p-4 w-72">
           <div className="flex justify-between items-center mb-3">
             <p className="text-sm font-semibold text-maroon-700">Did you mean?</p>
-            <button onClick={() => setSuggestions(null)} className="p-1 text-gray-400 hover:text-gray-600">
+            <button onClick={() => setSuggestions(undefined)} className="p-1 text-gray-400 hover:text-gray-600">
               <X className="h-4 w-4" />
             </button>
           </div>
