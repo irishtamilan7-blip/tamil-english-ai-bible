@@ -126,7 +126,7 @@ export default function VerseActionBar({ bookId, bookName, bookNameTamil, chapte
     const next = !showCrossRef
     setShowHighlight(false); setShowNote(false); setShowShare(false); setShowExplain(false)
     setShowCrossRef(next)
-    const currentLang = /[஀-௿]/.test(text) ? 'tamil' : 'english'
+    const currentLang = language === 'tamil' ? 'tamil' : 'english'
     // Re-fetch if opening and either no results yet, or language changed since last fetch
     if (next && (!crossRefs.length || crossRefFetchedLang !== currentLang)) {
       setCrossRefLoading(true)
@@ -150,7 +150,7 @@ export default function VerseActionBar({ bookId, bookName, bookNameTamil, chapte
     if (next && !explainText) {
       setExplainLoading(true)
       try {
-        const explainLang = /[஀-௿]/.test(text) ? 'tamil' : 'english'
+        const explainLang = language === 'tamil' ? 'tamil' : 'english'
         const res = await aiApi.explain(ref, text, explainLang)
         setExplainText(res.data.explanation)
       } catch {

@@ -85,7 +85,7 @@ router.post('/explain', async (req, res) => {
 
   const prompt = lang === 'tamil'
     ? `"${reference}" வசனம்: "${verseText}" — இந்த வசனத்தை எளிய தமிழில் விளக்குங்கள். முக்கிய செய்தி என்ன? இன்றைய வாழ்க்கையில் இதை எப்படி பயன்படுத்தலாம்? (150 வார்த்தைகளுக்கு மிகாமல்)`
-    : `Explain this Bible verse simply for an Indian Christian reader:\n\n${reference}: "${verseText}"\n\nWhat is the key message? How can it be applied to daily life? Keep it under 150 words.`
+    : `Explain this Bible verse in English for an Indian Christian reader. Your reply MUST be in English only.\n\n${reference}: "${verseText}"\n\nWhat is the key message? How can it be applied to daily life? Keep it under 150 words.`
 
   try {
     const reply = await groqChat([
