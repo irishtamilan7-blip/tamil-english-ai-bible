@@ -620,6 +620,7 @@ export default function ReadPage() {
       {selectedVerse && (
         <VerseActionBar
           bookId={chapter.book_id} bookName={chapter.book_name_english}
+          bookNameTamil={chapter.book_name_tamil}
           chapterNo={chapter.chapter_no} verseNo={selectedVerse}
           text={chapter.verses.find(v => v.verse_no === selectedVerse)?.text || ''}
           textOther={chapter.other_lang_verses?.find(v => v.verse_no === selectedVerse)?.text}

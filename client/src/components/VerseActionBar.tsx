@@ -12,6 +12,7 @@ import VerseCardModal from './VerseCardModal'
 interface Props {
   bookId: number
   bookName: string
+  bookNameTamil?: string
   chapterNo: number
   verseNo: number
   text: string
@@ -27,7 +28,7 @@ const HIGHLIGHT_COLORS = [
   { hex: '#FDC57B', label: 'Orange' },
 ]
 
-export default function VerseActionBar({ bookId, bookName, chapterNo, verseNo, text, textOther, onClose }: Props) {
+export default function VerseActionBar({ bookId, bookName, bookNameTamil, chapterNo, verseNo, text, textOther, onClose }: Props) {
   const { add, remove: removeBookmark, has } = useBookmarkStore()
   const hlStore   = useHighlightStore()
   const noteStore = useNoteStore()
@@ -108,12 +109,16 @@ export default function VerseActionBar({ bookId, bookName, chapterNo, verseNo, t
   }
 
   function openGoogle() {
-    const q = encodeURIComponent(`${ref} Bible verse explanation`)
+    const isTamil = language === 'tamil'
+    const baseRef = isTamil && bookNameTamil ? `${bookNameTamil} ${chapterNo}:${verseNo}` : ref
+    const q = encodeURIComponent(isTamil ? `${baseRef} தமிழ் வேதாகமம் விளக்கம்` : `${ref} Bible verse explanation`)
     window.open(`https://www.google.com/search?q=${q}`, '_blank', 'noreferrer')
   }
 
   function openYouTube() {
-    const q = encodeURIComponent(`${ref} Bible verse`)
+    const isTamil = language === 'tamil'
+    const baseRef = isTamil && bookNameTamil ? `${bookNameTamil} ${chapterNo}:${verseNo}` : ref
+    const q = encodeURIComponent(isTamil ? `${baseRef} தமிழ் வேதாகமம்` : `${ref} Bible verse`)
     window.open(`https://www.youtube.com/results?search_query=${q}`, '_blank', 'noreferrer')
   }
 
