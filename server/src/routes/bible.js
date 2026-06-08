@@ -1,21 +1,26 @@
 const express = require('express')
-const router = express.Router()
-const { getTamil, getEnglish, getBook, getChapter, searchVerses } = require('../data/loader')
+const router  = express.Router()
+const { getTamil, getEnglish, getBook, getChapter, applyVersion, searchVerses, getVersionCatalog } = require('../data/loader')
+
+// GET /api/bible/versions
+router.get('/versions', (req, res) => {
+  res.json({ versions: getVersionCatalog() })
+})
 
 // GET /api/bible/books
 router.get('/books', (req, res) => {
-  const lang = req.query.lang || 'english'
+  const lang  = req.query.lang || 'english'
   const bible = lang === 'tamil' ? getTamil() : getEnglish()
   if (!bible) return res.status(503).json({ error: 'Bible data not loaded' })
 
   const books = bible.books.map(b => ({
     id: b.id,
     name_english: b.name_english,
-    name_tamil: b.name_tamil,
-    testament: b.testament,
+    name_tamil:   b.name_tamil,
+    testament:    b.testament,
     chapter_count: b.chapters.length,
     aliases_english: b.aliases_english,
-    aliases_tamil: b.aliases_tamil,
+    aliases_tamil:   b.aliases_tamil,
   }))
   res.json({ books, total: books.length })
 })
@@ -29,17 +34,18 @@ router.get('/books/:bookId', (req, res) => {
   res.json({
     id: book.id,
     name_english: book.name_english,
-    name_tamil: book.name_tamil,
-    testament: book.testament,
+    name_tamil:   book.name_tamil,
+    testament:    book.testament,
     chapter_count: book.chapters.length,
     aliases_english: book.aliases_english,
-    aliases_tamil: book.aliases_tamil,
+    aliases_tamil:   book.aliases_tamil,
   })
 })
 
-// GET /api/bible/books/:bookId/chapters/:chapterNo
+// GET /api/bible/books/:bookId/chapters/:chapterNo?lang=english&bilingual=false&version=bbe
 router.get('/books/:bookId/chapters/:chapterNo', (req, res) => {
-  const lang = req.query.lang || 'english'
+  const lang    = req.query.lang    || 'english'
+  const version = req.query.version || 'bsb'
   const { bookId, chapterNo } = req.params
 
   const book = getBook(lang, bookId)
@@ -52,47 +58,50 @@ router.get('/books/:bookId/chapters/:chapterNo', (req, res) => {
     })
   }
 
-  // bilingual mode: attach other language verses if requested
+  // Apply version overlay for English
+  const verses = lang === 'english'
+    ? applyVersion(chapter.verses, book.id, chapter.chapter_no, version)
+    : chapter.verses
+
+  // Bilingual: attach other-language verses
   let otherVerses = null
   if (req.query.bilingual === 'true') {
-    const otherLang = lang === 'tamil' ? 'english' : 'tamil'
+    const otherLang    = lang === 'tamil' ? 'english' : 'tamil'
     const otherChapter = getChapter(otherLang, bookId, chapterNo)
-    if (otherChapter) otherVerses = otherChapter.verses
+    if (otherChapter) {
+      otherVerses = otherLang === 'english'
+        ? applyVersion(otherChapter.verses, book.id, otherChapter.chapter_no, version)
+        : otherChapter.verses
+    }
   }
 
   res.json({
-    book_id: book.id,
+    book_id:           book.id,
     book_name_english: book.name_english,
-    book_name_tamil: book.name_tamil,
-    chapter_no: chapter.chapter_no,
-    verses: chapter.verses,
+    book_name_tamil:   book.name_tamil,
+    chapter_no:        chapter.chapter_no,
+    verses,
     other_lang_verses: otherVerses,
-    total_verses: chapter.verses.length,
+    total_verses:      verses.length,
     has_next: parseInt(chapterNo) < book.chapters.length,
     has_prev: parseInt(chapterNo) > 1,
   })
 })
 
-// GET /api/bible/search?q=love&lang=english&testament=all
+// GET /api/bible/search?q=love&lang=english&testament=all&version=bbe
 router.get('/search', (req, res) => {
-  const { q, lang = 'english', testament = 'all' } = req.query
+  const { q, lang = 'english', testament = 'all', version = 'bbe' } = req.query
   if (!q || q.trim().length < 2) {
     return res.status(400).json({ error: 'Search query must be at least 2 characters' })
   }
 
-  const results = searchVerses(q, lang, testament)
-  const total = results.length
-  const page = parseInt(req.query.page) || 1
-  const limit = 50
+  const results   = searchVerses(q, lang, testament, version)
+  const total     = results.length
+  const page      = parseInt(req.query.page) || 1
+  const limit     = 50
   const paginated = results.slice((page - 1) * limit, page * limit)
 
-  res.json({
-    query: q,
-    total,
-    page,
-    pages: Math.ceil(total / limit),
-    results: paginated,
-  })
+  res.json({ query: q, total, page, pages: Math.ceil(total / limit), results: paginated })
 })
 
 module.exports = router
