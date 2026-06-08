@@ -386,8 +386,26 @@ export default function ReadPage() {
   }
 
   if (!chapter) return (
-    <div className="flex items-center justify-center h-64">
-      <div className="h-8 w-8 border-2 border-maroon-700 border-t-transparent rounded-full animate-spin" />
+    <div className="max-w-2xl mx-auto animate-pulse">
+      {/* Header skeleton */}
+      <div className="sticky top-0 z-30 bg-white border-b border-cream-300 px-4 py-3 flex items-center gap-2">
+        <div className="w-6 h-6 bg-cream-200 rounded" />
+        <div className="flex-1 flex flex-col items-center gap-1">
+          <div className="h-3.5 w-32 bg-cream-200 rounded" />
+          <div className="h-2.5 w-20 bg-cream-100 rounded" />
+        </div>
+        <div className="w-8 h-6 bg-cream-200 rounded" />
+        <div className="w-6 h-6 bg-cream-200 rounded" />
+      </div>
+      {/* Verse skeleton lines */}
+      <div className="px-4 pt-5 space-y-3">
+        {Array.from({ length: 12 }).map((_, i) => (
+          <div key={i} className="space-y-1.5">
+            <div className="h-3 rounded bg-cream-200" style={{ width: `${70 + (i % 4) * 8}%` }} />
+            <div className="h-3 rounded bg-cream-100" style={{ width: `${50 + (i % 3) * 12}%` }} />
+          </div>
+        ))}
+      </div>
     </div>
   )
 
