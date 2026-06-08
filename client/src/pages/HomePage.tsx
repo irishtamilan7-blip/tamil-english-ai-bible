@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { BookOpen, Clock, Search, Mic } from 'lucide-react'
+import { BookOpen, Clock, Search, Mic, CalendarDays, ChevronRight } from 'lucide-react'
 import { useAppStore } from '../store/useAppStore'
 import { bibleApi } from '../utils/api'
+
+let dailyVerseCache: { date: string; verse: DailyVerse } | null = null
 
 // Daily verse: deterministic by day-of-year
 const DAILY_VERSES = [
@@ -20,57 +22,87 @@ const DAILY_VERSES = [
 
 interface DailyVerse {
   ref: string
-  text: string
+  textEnglish: string
+  textTamil: string
   bookId: number
   chapter: number
   verse: number
 }
 
 export default function HomePage() {
-  const { lastRead, searchHistory, language } = useAppStore()
-  const [dailyVerse, setDailyVerse] = useState<DailyVerse | null>(null)
+  const { lastRead, searchHistory } = useAppStore()
+  const today = new Date().toDateString()
+  const [dailyVerse, setDailyVerse] = useState<DailyVerse | null>(
+    dailyVerseCache?.date === today ? dailyVerseCache.verse : null
+  )
 
   useEffect(() => {
+    if (dailyVerseCache?.date === today) return
     const dayOfYear = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 86400000)
     const pick = DAILY_VERSES[dayOfYear % DAILY_VERSES.length]
-    const lang = language === 'bilingual' ? 'english' : language
 
-    bibleApi.getChapter(pick.bookId, pick.chapter, lang)
-      .then((res) => {
-        const verses = res.data.verses
-        const v = verses.find((vv: { verse_no: number; text: string }) => vv.verse_no === pick.verse)
-        if (v) setDailyVerse({ ref: pick.ref, text: v.text, bookId: pick.bookId, chapter: pick.chapter, verse: pick.verse })
-      })
-      .catch(() => {})
-  }, [language])
+    Promise.all([
+      bibleApi.getChapter(pick.bookId, pick.chapter, 'english'),
+      bibleApi.getChapter(pick.bookId, pick.chapter, 'tamil'),
+    ]).then(([engRes, tamRes]) => {
+      const HEBREW_HEADINGS = /^[-\s]*(ALEPH|BETH|GIMEL|DALETH|HE|VAU|VAV|ZAIN|ZAYIN|CHETH|HETH|TETH|JOD|YOD|CAPH|KAPH|LAMED|MEM|NUN|SAMECH|SAMEKH|AIN|AYIN|PE|TZADDI|TSADE|KOPH|QOPH|RESH|SHIN|SCHIN|TAU|TAV)[-\s.]*/i
+      const findText = (verses: { verse_no: number; text: string }[]) =>
+        (verses.find(v => v.verse_no === pick.verse)?.text || '').replace(HEBREW_HEADINGS, '').trim()
+      const verse: DailyVerse = {
+        ref: pick.ref,
+        textEnglish: findText(engRes.data.verses),
+        textTamil:   findText(tamRes.data.verses),
+        bookId: pick.bookId,
+        chapter: pick.chapter,
+        verse: pick.verse,
+      }
+      dailyVerseCache = { date: today, verse }
+      setDailyVerse(verse)
+    }).catch(() => {})
+  }, [today])
 
   return (
     <div className="max-w-lg mx-auto px-4 py-6 space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-maroon-700 font-serif">BibleVoice</h1>
+        <h1 className="text-2xl font-bold text-maroon-700 font-serif">Tamil English AI Bible</h1>
         <p className="text-sm text-gray-500 font-tamil">விவிலியம் — Hear the Word</p>
       </div>
 
       {/* Daily Verse */}
       <div className="bg-maroon-700 rounded-2xl p-5 text-white">
-        <p className="text-xs font-medium text-gold-400 uppercase tracking-wide mb-2">
+        <p className="text-xs font-medium text-gold-400 uppercase tracking-wide mb-3">
           Today's Verse · {new Date().toLocaleDateString('en-IE', { day: 'numeric', month: 'short' })}
         </p>
         {dailyVerse ? (
           <>
+            {/* English */}
             <p className="text-base leading-relaxed font-serif mb-3 opacity-95">
-              "{dailyVerse.text}"
+              "{dailyVerse.textEnglish}"
             </p>
+            {/* Divider */}
+            <div className="border-t border-maroon-500 mb-3" />
+            {/* Tamil */}
+            {dailyVerse.textTamil && (
+              <p className="text-sm leading-relaxed font-tamil text-maroon-100 mb-3">
+                "{dailyVerse.textTamil}"
+              </p>
+            )}
             <Link
               to={`/read/${dailyVerse.bookId}/${dailyVerse.chapter}?verse=${dailyVerse.verse}`}
-              className="text-sm text-gold-400 font-medium hover:text-gold-300"
+              className="inline-block text-sm text-gold-400 font-medium hover:text-gold-300"
             >
               — {dailyVerse.ref} →
             </Link>
           </>
         ) : (
-          <div className="h-16 animate-pulse bg-maroon-600 rounded-lg" />
+          <div className="space-y-2">
+            <div className="h-4 animate-pulse bg-maroon-600 rounded w-full" />
+            <div className="h-4 animate-pulse bg-maroon-600 rounded w-4/5" />
+            <div className="h-px bg-maroon-500 my-3" />
+            <div className="h-4 animate-pulse bg-maroon-600 rounded w-full" />
+            <div className="h-4 animate-pulse bg-maroon-600 rounded w-3/4" />
+          </div>
         )}
       </div>
 
@@ -127,6 +159,24 @@ export default function HomePage() {
             <p className="text-xs text-gray-400 mt-1">27 Books</p>
           </Link>
         </div>
+      </div>
+
+      {/* Reading Plan */}
+      <div>
+        <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">Reading Plan</h2>
+        <Link
+          to="/plan"
+          className="flex items-center gap-4 bg-white border border-cream-300 rounded-xl px-4 py-3.5 hover:border-maroon-300 transition-colors"
+        >
+          <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center shrink-0">
+            <CalendarDays className="h-5 w-5 text-green-700" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-medium text-gray-900">Reading Plan</p>
+            <p className="text-xs text-gray-500">Read the Bible in 365 days</p>
+          </div>
+          <ChevronRight className="h-4 w-4 text-gray-400 shrink-0" />
+        </Link>
       </div>
 
       {/* Recent searches */}

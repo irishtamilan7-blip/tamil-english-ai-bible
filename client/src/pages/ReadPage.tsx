@@ -11,6 +11,8 @@ import { useNoteStore } from '../store/useNoteStore'
 import { useReadingPlanStore } from '../store/useReadingPlanStore'
 import { getPlan } from '../utils/readingPlan'
 
+const chapterCache: Record<string, ChapterData> = {}
+
 interface Verse { verse_no: number; text: string }
 interface ChapterData {
   book_id: number
@@ -141,8 +143,18 @@ export default function ReadPage() {
   const loadChapter = useCallback(async (bId: string, chId: string) => {
     stopAudio()
     setSelectedVerse(null)
+    const cacheKey = `${bId}-${chId}-${lang}-${language === 'bilingual'}-${bibleVersion}`
+    const cached = chapterCache[cacheKey]
+    if (cached) {
+      setChapter(cached)
+      setLoading(false)
+      document.querySelector('main')?.scrollTo({ top: 0 })
+      setLastRead({ bookId: parseInt(bId), bookName: cached.book_name_english, chapterNo: parseInt(chId) })
+      return
+    }
     try {
       const res = await bibleApi.getChapter(parseInt(bId), parseInt(chId), lang, language === 'bilingual', bibleVersion)
+      chapterCache[cacheKey] = res.data
       setChapter(res.data)
       setLastRead({ bookId: parseInt(bId), bookName: res.data.book_name_english, chapterNo: parseInt(chId) })
       document.querySelector('main')?.scrollTo({ top: 0 })
