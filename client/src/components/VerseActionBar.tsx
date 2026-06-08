@@ -55,7 +55,24 @@ export default function VerseActionBar({ bookId, bookName, bookNameTamil, chapte
   const [noteText, setNoteText]           = useState(existingNote?.text ?? '')
   const [copied, setCopied]               = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const scrollRef   = useRef<HTMLDivElement>(null)
   const { language } = useAppStore()
+
+  // Lock background page scroll while action bar is open
+  useEffect(() => {
+    const main = document.querySelector('main') as HTMLElement | null
+    if (main) { main.style.overflow = 'hidden' }
+    return () => { if (main) main.style.overflow = '' }
+  }, [])
+
+  // Properly isolate inner scroll on iOS using non-passive listener
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const stop = (e: TouchEvent) => e.stopPropagation()
+    el.addEventListener('touchmove', stop, { passive: false })
+    return () => el.removeEventListener('touchmove', stop)
+  }, [])
 
   useEffect(() => {
     if (showNote) textareaRef.current?.focus()
@@ -179,7 +196,7 @@ export default function VerseActionBar({ bookId, bookName, bookNameTamil, chapte
 
   return (
     <>
-    <div className="fixed bottom-40 left-4 right-4 z-50 bg-white rounded-2xl shadow-2xl border border-cream-300" style={{ maxHeight: 'calc(100dvh - 180px)', display: 'flex', flexDirection: 'column' }}>
+    <div className="fixed bottom-40 left-4 right-4 z-50 bg-white rounded-2xl shadow-2xl border border-cream-300" style={{ maxHeight: 'calc(100dvh - 240px)', display: 'flex', flexDirection: 'column' }}>
       {/* Header — outside scroll area so X is always visible */}
       <div style={{ flexShrink: 0 }} className="flex justify-between items-center px-4 pt-3 pb-2 border-b border-cream-100">
         <p className="text-xs text-gray-500 font-medium">{bookName} {chapterNo}:{verseNo}</p>
@@ -188,10 +205,10 @@ export default function VerseActionBar({ bookId, bookName, bookNameTamil, chapte
         </button>
       </div>
 
-      {/* Panels — scrollable middle section, isolated from background scroll */}
+      {/* Panels — scrollable middle, scroll-isolated from reading page */}
       <div
+        ref={scrollRef}
         style={{ flex: 1, minHeight: 0, overflowY: 'auto', overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
-        onTouchMove={e => e.stopPropagation()}
       >
 
       {/* Share sheet */}
