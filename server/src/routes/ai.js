@@ -33,7 +33,7 @@ async function groqChat(messages) {
       'Authorization': `Bearer ${key}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ model: MODEL, messages, temperature: 0.7, max_tokens: 2500 }),
+    body: JSON.stringify({ model: MODEL, messages, temperature: 0.7, max_tokens: 1024 }),
   })
 
   if (!res.ok) {
@@ -96,74 +96,36 @@ router.post('/explain', async (req, res) => {
   if (!verseText?.trim()) return res.status(400).json({ error: 'Verse text required' })
 
   const prompt = lang === 'tamil'
-    ? `நீங்கள் ஒரு அன்பான, இரக்கமுள்ள, ஆழமான வேத அறிவுள்ள உள்ளூர் போதகர். தனிமையில் வேதம் படிக்கும் ஒரு விசுவாசியிடம் நேரடியாக பேசுகிறீர்கள். பின்வரும் வசனத்திற்கு சரியாக இந்த 4-பகுதி அமைப்பில் பக்தி தியானம் வழங்குங்கள்:
+    ? `நீங்கள் ஒரு அன்பான போதகர். "${reference}: ${verseText}" — இந்த வசனத்தை 4 பகுதியில் சுருக்கமாக விளக்குங்கள்:
 
-வசனம்: ${reference} — "${verseText}"
+### 🔊 தனிப்பட்ட செய்தி
+"நண்பரே..." என்று தொடங்கி 2-3 வாக்கியத்தில் வசனத்தை அறிமுகப்படுத்துங்கள்.
 
----
+### 2. முக்கிய வார்த்தை
+ஒரு வார்த்தையை எடுத்து எளிய உதாரணத்தால் விளக்குங்கள் (3-4 வாக்கியம்).
 
-### 🔊 உங்கள் அமைதி நேரத்திற்கான தனிப்பட்ட செய்தி
+### 3. வேத வசனங்கள்
+2 தொடர்புடைய வசனங்களை > மேற்கோளாக எழுதுங்கள்.
 
-**வேதாகமம்:** ${reference} – "${verseText}"
-**தொனி:** உரையாடல், ஆறுதல் தரும், மனதை உயர்த்தும்
+### 🕯️ ஜெபம்
+> ஒரு சுருக்கமான தனிப்பட்ட ஜெபம்.
 
-"நண்பரே..." என்று தொடங்கி, இந்த வசனத்தை யார் எழுதினார்கள், ஏன் முக்கியம் என்று தனிமையில் படிக்கும் ஒருவருக்கு எளிமையாக விளக்குங்கள். மதகுரு பேச்சு இல்லாமல் இதை தனிப்பட்டதாக ஆக்குங்கள்.
+தமிழில் மட்டும் பதில் அளிக்கவும்.`
+    : `You are a warm pastor. For this verse — ${reference}: "${verseText}" — write a brief 4-part devotional in English only:
 
----
+### 🔊 A Personal Message
+Start with "Hey friend," — 2-3 sentences introducing the verse personally.
 
-### 2. ஆழமான வார்த்தை விளக்கம்
+### 2. Key Word
+Pick one word, explain its depth with a simple metaphor (3-4 sentences).
 
-வசனத்திலிருந்து ஒரு முக்கிய வார்த்தை அல்லது கருத்தை எடுத்து, அன்றாட வாழ்க்கை உதாரணங்களால் விளக்குங்கள். "இப்போது, உங்கள் அமைதியான அறையில்..." என்று நேரடியாக பேசுங்கள்.
+### 3. Cross-References
+2 related verses in blockquote format (use >).
 
----
+### 🕯️ Prayer
+> A short personal prayer they can pray right now.
 
-### 3. வேத இணைப்புகள்
-
-சரியாக 3 அல்லது 4 தொடர்புடைய வேத வசனங்களை மேற்கோளாக எழுதி (> பயன்படுத்தி), ஒவ்வொன்றும் இந்த வசனத்துடன் எவ்வாறு தொடர்புடையது என்று விளக்குங்கள்.
-
----
-
-### 🕯️ உங்கள் தனிப்பட்ட ஊழிய தருணம்
-
-கண்களை மூடி ஒரு நிமிடம் இருக்கச் சொல்லுங்கள். இந்த வசனத்துடன் தொடர்புடைய சவால்களை (கவலை, சோர்வு, சந்தேகம்) ஒப்புக்கொள்ளுங்கள். பிறகு அவர்கள் சொல்லக்கூடிய குறுகிய, தனிப்பட்ட ஜெபத்தை மேற்கோளாக (> பயன்படுத்தி) எழுதுங்கள்.
-
----
-
-முழுவதும் தமிழில் மட்டுமே பதில் அளிக்கவும். கல்வி விரிவுரையாளர் போல் பேசாதீர்கள் — போதகர் போல் அன்போடு பேசுங்கள்.`
-    : `You are a warm, compassionate, deeply knowledgeable local church pastor speaking directly to a believer reading their Bible alone during personal quiet time. Generate a devotional for the verse below following this exact 4-part structure. Your reply MUST be entirely in English.
-
-Verse: ${reference} — "${verseText}"
-
----
-
-### 🔊 A Personal Message for Your Quiet Time
-
-**Scripture:** ${reference} – "${verseText}"
-**Tone:** Conversational, comforting, and deeply encouraging
-
-Start with "Hey friend," — validate their choice to pause on this verse. Break down who wrote it or why it matters personally to someone sitting alone right now. Strip away religious noise to make it highly personal.
-
----
-
-### 2. Deep Word / Concept Breakdown
-
-Isolate one specific word or key phrase from this verse. Explain its depth using practical everyday metaphors. Speak directly: "Right now, in the quiet of your room..."
-
----
-
-### 3. Scriptural Weaving
-
-Provide exactly 3 or 4 high-impact cross-references (mix Old and New Testament). For EVERY cross-reference, write the full verse text in blockquote format (use >). Explain how each connects back to the theme of the main verse.
-
----
-
-### 🕯️ Your Personal Ministry Moment
-
-Instruct them to close their eyes for ten seconds. Acknowledge common struggles related to this verse (anxiety, fatigue, doubt). Then provide a short first-person prayer in blockquote format (use >) they can pray right where they are.
-
----
-
-Never sound like an encyclopedia or rigid lecturer. Always use relational language. Keep sentences punchy and easy to read on a mobile screen. Do not mention AI.`
+Keep it concise and warm. No AI mention.`
 
   try {
     const reply = await groqChat([
