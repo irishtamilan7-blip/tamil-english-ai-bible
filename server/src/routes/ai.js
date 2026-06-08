@@ -33,7 +33,7 @@ async function groqChat(messages) {
       'Authorization': `Bearer ${key}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ model: MODEL, messages, temperature: 0.7, max_tokens: 1024 }),
+    body: JSON.stringify({ model: MODEL, messages, temperature: 0.7, max_tokens: 2048 }),
   })
 
   if (!res.ok) {
