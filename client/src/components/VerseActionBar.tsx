@@ -179,14 +179,20 @@ export default function VerseActionBar({ bookId, bookName, bookNameTamil, chapte
 
   return (
     <>
-    <div className="fixed bottom-40 left-4 right-4 z-50 bg-white rounded-2xl shadow-2xl border border-cream-300" style={{ maxHeight: 'calc(100dvh - 180px)', overflowY: 'auto' }}>
-      {/* Header — sticky so X button stays visible while scrolling */}
-      <div className="sticky top-0 z-10 bg-white flex justify-between items-center px-4 pt-3 pb-2 border-b border-cream-100">
+    <div className="fixed bottom-40 left-4 right-4 z-50 bg-white rounded-2xl shadow-2xl border border-cream-300" style={{ maxHeight: 'calc(100dvh - 180px)', display: 'flex', flexDirection: 'column' }}>
+      {/* Header — outside scroll area so X is always visible */}
+      <div style={{ flexShrink: 0 }} className="flex justify-between items-center px-4 pt-3 pb-2 border-b border-cream-100">
         <p className="text-xs text-gray-500 font-medium">{bookName} {chapterNo}:{verseNo}</p>
         <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600 min-h-0 min-w-0">
           <X className="h-4 w-4" />
         </button>
       </div>
+
+      {/* Panels — scrollable middle section, isolated from background scroll */}
+      <div
+        style={{ flex: 1, minHeight: 0, overflowY: 'auto', overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
+        onTouchMove={e => e.stopPropagation()}
+      >
 
       {/* Share sheet */}
       {showShare && (
@@ -373,8 +379,10 @@ export default function VerseActionBar({ bookId, bookName, bookNameTamil, chapte
         </div>
       )}
 
-      {/* Action buttons — row 1: 4 buttons, row 2: 3 buttons */}
-      <div className="px-3 py-3 space-y-1">
+      </div>{/* end scrollable panels */}
+
+      {/* Action buttons — always visible, outside scroll area */}
+      <div className="px-3 py-3 space-y-1" style={{ flexShrink: 0 }}>
         <div className="grid grid-cols-4 gap-1">
           <ActionBtn
             icon={<Highlighter className="h-5 w-5" />}
