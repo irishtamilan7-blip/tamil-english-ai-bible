@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import ReactMarkdown from 'react-markdown'
 import { Highlighter, Bookmark, FileText, Share2, Copy, X, Check, Trash2, Sparkles, Link2 as LinkIcon, Image as ImageIcon, Search, Youtube } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useNavigate } from 'react-router-dom'
@@ -307,9 +308,14 @@ export default function VerseActionBar({ bookId, bookName, bookNameTamil, chapte
               ))}
             </div>
           ) : (
-            <p className="text-sm text-gray-700 leading-relaxed bg-maroon-50 rounded-xl px-3 py-2.5 whitespace-pre-wrap">
-              {explainText}
-            </p>
+            <div className="text-sm text-gray-700 leading-relaxed bg-maroon-50 rounded-xl px-3 py-2.5 prose prose-sm max-w-none
+              prose-headings:text-maroon-700 prose-headings:font-semibold prose-headings:text-sm prose-headings:mt-3 prose-headings:mb-1
+              prose-p:my-1.5 prose-p:leading-relaxed
+              prose-blockquote:border-l-2 prose-blockquote:border-maroon-300 prose-blockquote:pl-3 prose-blockquote:italic prose-blockquote:text-maroon-800 prose-blockquote:bg-maroon-100/50 prose-blockquote:rounded-r-lg prose-blockquote:py-1 prose-blockquote:my-2
+              prose-strong:text-maroon-700
+              prose-hr:border-cream-300 prose-hr:my-2">
+              <ReactMarkdown>{explainText}</ReactMarkdown>
+            </div>
           )}
         </div>
       )}
