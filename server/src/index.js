@@ -8,10 +8,7 @@ let PORT = parseInt(process.env.PORT) || 5000
 
 // Middleware
 app.use(cors({
-  origin: [
-    process.env.CLIENT_URL || 'http://localhost:3000',
-    'http://localhost:5173', // Vite default
-  ],
+  origin: true, // allow all origins (Capacitor iOS uses capacitor:// scheme)
   credentials: true,
 }))
 app.use(express.json({ limit: '10mb' }))
@@ -22,6 +19,7 @@ app.use('/health', require('./routes/health'))
 app.use('/api/bible', require('./routes/bible'))
 app.use('/api/voice', require('./routes/voice'))
 app.use('/api/contact', require('./routes/contact'))
+app.use('/api/ai', require('./routes/ai'))
 
 // 404
 app.use((req, res) => {
@@ -36,7 +34,7 @@ app.use((err, req, res, next) => {
 
 // Start
 function start(port) {
-  const server = app.listen(port, () => {
+  const server = app.listen(port, '0.0.0.0', () => {
     console.log(`\n🟢 BibleVoice Server running on port ${port}`)
     console.log(`   Health: http://localhost:${port}/health`)
     console.log(`   Bible:  http://localhost:${port}/api/bible/books\n`)
