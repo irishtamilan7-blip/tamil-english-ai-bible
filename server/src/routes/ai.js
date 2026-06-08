@@ -45,6 +45,18 @@ async function groqChat(messages) {
   return data.choices[0].message.content
 }
 
+// GET /api/ai/test — debug: shows actual Groq error
+router.get('/test', async (req, res) => {
+  const key = getKey()
+  if (!key) return res.json({ status: 'NO_KEY', message: 'GROQ_API_KEY not set' })
+  try {
+    const result = await groqChat([{ role: 'user', content: 'Say "OK" in one word.' }])
+    res.json({ status: 'OK', reply: result })
+  } catch (err) {
+    res.json({ status: 'ERROR', message: err?.message })
+  }
+})
+
 // POST /api/ai/chat
 router.post('/chat', async (req, res) => {
   if (!getKey()) {
