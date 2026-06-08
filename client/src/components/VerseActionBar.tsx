@@ -9,6 +9,8 @@ import { aiApi } from '../utils/api'
 import { useAppStore } from '../store/useAppStore'
 import VerseCardModal from './VerseCardModal'
 
+const explainCache: Record<string, string> = {}
+
 interface Props {
   bookId: number
   bookName: string
@@ -148,15 +150,21 @@ export default function VerseActionBar({ bookId, bookName, bookNameTamil, chapte
     setShowHighlight(false); setShowNote(false); setShowShare(false)
     setShowExplain(next)
     if (next && !explainText) {
-      setExplainLoading(true)
-      try {
-        const explainLang = language === 'tamil' ? 'tamil' : 'english'
-        const res = await aiApi.explain(ref, text, explainLang)
-        setExplainText(res.data.explanation)
-      } catch {
-        setExplainText('Could not load explanation. Please try again.')
-      } finally {
-        setExplainLoading(false)
+      const explainLang = language === 'tamil' ? 'tamil' : 'english'
+      const cacheKey = `${bookId}-${chapterNo}-${verseNo}-${explainLang}`
+      if (explainCache[cacheKey]) {
+        setExplainText(explainCache[cacheKey])
+      } else {
+        setExplainLoading(true)
+        try {
+          const res = await aiApi.explain(ref, text, explainLang)
+          explainCache[cacheKey] = res.data.explanation
+          setExplainText(res.data.explanation)
+        } catch {
+          setExplainText('Could not load explanation. Please try again.')
+        } finally {
+          setExplainLoading(false)
+        }
       }
     }
   }
