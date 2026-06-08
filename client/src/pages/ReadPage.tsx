@@ -637,6 +637,7 @@ export default function ReadPage() {
 
       {selectedVerse && (
         <VerseActionBar
+          key={selectedVerse}
           bookId={chapter.book_id} bookName={chapter.book_name_english}
           bookNameTamil={chapter.book_name_tamil}
           chapterNo={chapter.chapter_no} verseNo={selectedVerse}
