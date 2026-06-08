@@ -11,18 +11,24 @@ interface Book {
   testament: string
 }
 
+const booksCache: Partial<Record<string, Book[]>> = {}
+
 export default function TestamentPage() {
   const { type } = useParams<{ type: 'old' | 'new' }>()
-  const [books, setBooks] = useState<Book[]>([])
-  const [loading, setLoading] = useState(true)
+  const cached = booksCache[type ?? '']
+  const [books, setBooks] = useState<Book[]>(cached ?? [])
+  const [loading, setLoading] = useState(!cached)
 
   useEffect(() => {
+    if (cached) return
     bibleApi.getBooks('english')
       .then((res) => {
-        setBooks(res.data.books.filter((b: Book) => b.testament === type))
+        const filtered = res.data.books.filter((b: Book) => b.testament === type)
+        booksCache[type ?? ''] = filtered
+        setBooks(filtered)
       })
       .finally(() => setLoading(false))
-  }, [type])
+  }, [type, cached])
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-5">
@@ -54,8 +60,12 @@ export default function TestamentPage() {
               to={`/book/${book.id}`}
               className="bg-white border border-cream-300 rounded-xl p-3 text-center hover:border-maroon-300 hover:bg-maroon-50/30 transition-colors"
             >
-              <p className="font-medium text-maroon-700 text-sm leading-tight">{book.name_english}</p>
-              <p className="text-xs text-gray-500 font-tamil mt-0.5 leading-snug">{book.name_tamil}</p>
+              <p className={`font-medium text-maroon-700 leading-tight ${book.name_english.length > 11 ? 'text-[10px]' : 'text-sm'}`}>
+                {book.name_english}
+              </p>
+              <p className={`text-gray-500 font-tamil mt-0.5 leading-snug ${book.name_tamil.length > 12 ? 'text-[9px]' : 'text-xs'}`}>
+                {book.name_tamil}
+              </p>
               <p className="text-xs text-gray-400 mt-1">{book.chapter_count} ch</p>
             </Link>
           ))}

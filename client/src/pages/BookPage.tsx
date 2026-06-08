@@ -13,20 +13,23 @@ interface Book {
   testament: string
 }
 
+const bookCache: Record<string, Book> = {}
+
 export default function BookPage() {
   const { bookId } = useParams()
   const navigate = useNavigate()
   const setSheetOpen = useAppStore((s) => s.setSheetOpen)
-  const [book, setBook] = useState<Book | null>(null)
+  const cached = bookId ? bookCache[bookId] : null
+  const [book, setBook] = useState<Book | null>(cached ?? null)
   const [selectedChapter, setSelectedChapter] = useState<number | null>(null)
   const [verseCount, setVerseCount] = useState<number>(30)
 
   useEffect(() => {
-    if (!bookId) return
+    if (!bookId || cached) return
     bibleApi.getBook(parseInt(bookId))
-      .then((res) => setBook(res.data))
+      .then((res) => { bookCache[bookId] = res.data; setBook(res.data) })
       .catch(() => {})
-  }, [bookId])
+  }, [bookId, cached])
 
   useEffect(() => {
     if (!selectedChapter || !bookId) return

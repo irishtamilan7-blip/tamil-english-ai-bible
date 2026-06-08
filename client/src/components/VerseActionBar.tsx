@@ -150,7 +150,8 @@ export default function VerseActionBar({ bookId, bookName, bookNameTamil, chapte
     if (next && !explainText) {
       setExplainLoading(true)
       try {
-        const res = await aiApi.explain(ref, text, language === 'tamil' ? 'tamil' : 'english')
+        const explainLang = language === 'english' ? 'english' : 'tamil'
+        const res = await aiApi.explain(ref, text, explainLang)
         setExplainText(res.data.explanation)
       } catch {
         setExplainText('Could not load explanation. Please try again.')
