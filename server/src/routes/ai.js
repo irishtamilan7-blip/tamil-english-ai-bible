@@ -18,6 +18,11 @@ Your role:
 
 Do not speculate beyond Scripture. If unsure, say so honestly.`
 
+// Server-side cache — shared across ALL users, persists until redeploy
+// Key: "reference_lang"  e.g. "John 3:16_english"
+const serverExplainCache  = new Map()
+const serverCrossRefCache = new Map()
+
 function getKey() {
   const k = process.env.GROQ_API_KEY
   return (!k || k === 'your_groq_api_key_here') ? null : k
@@ -95,6 +100,12 @@ router.post('/explain', async (req, res) => {
   const { reference, verseText, lang = 'english' } = req.body
   if (!verseText?.trim()) return res.status(400).json({ error: 'Verse text required' })
 
+  // Serve from server cache — costs zero tokens for any user after the first
+  const cacheKey = `${reference}_${lang}`
+  if (serverExplainCache.has(cacheKey)) {
+    return res.json({ explanation: serverExplainCache.get(cacheKey) })
+  }
+
   const prompt = lang === 'tamil'
     ? `நீங்கள் ஒரு அன்பான போதகர். "${reference}: ${verseText}" — இந்த வசனத்தை 4 பகுதியில் சுருக்கமாக விளக்குங்கள்:
 
@@ -132,6 +143,7 @@ Keep it concise and warm. No AI mention.`
       { role: 'system', content: SYSTEM_PROMPT },
       { role: 'user', content: prompt },
     ])
+    serverExplainCache.set(cacheKey, reply)
     res.json({ explanation: reply })
   } catch (err) {
     console.error('AI explain error:', err?.message)
@@ -194,6 +206,12 @@ router.post('/cross-ref', async (req, res) => {
   const { reference, verseText, lang = 'english' } = req.body
   if (!reference || !verseText?.trim()) return res.status(400).json({ error: 'Reference and verse text required' })
 
+  // Serve from server cache — zero tokens for any user after the first
+  const crossCacheKey = `${reference}_${lang}`
+  if (serverCrossRefCache.has(crossCacheKey)) {
+    return res.json({ refs: serverCrossRefCache.get(crossCacheKey) })
+  }
+
   const isTamil = lang === 'tamil'
 
   const prompt = isTamil
@@ -250,6 +268,7 @@ STRICT rules:
       return cr
     })
 
+    serverCrossRefCache.set(crossCacheKey, verified)
     res.json({ refs: verified })
   } catch (err) {
     console.error('AI cross-ref error:', err?.message)
