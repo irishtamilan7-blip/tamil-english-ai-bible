@@ -169,20 +169,31 @@ export default function VerseActionBar({ bookId, bookName, bookNameTamil, chapte
     setShowExplain(next)
     if (next && !explainText) {
       const explainLang = language === 'tamil' ? 'tamil' : 'english'
-      const cacheKey = `${bookId}-${chapterNo}-${verseNo}-${explainLang}`
+      const cacheKey = `bv_explain_${bookId}_${chapterNo}_${verseNo}_${explainLang}`
+      // 1. Check memory cache (same session)
       if (explainCache[cacheKey]) {
         setExplainText(explainCache[cacheKey])
-      } else {
-        setExplainLoading(true)
-        try {
-          const res = await aiApi.explain(ref, text, explainLang)
-          explainCache[cacheKey] = res.data.explanation
-          setExplainText(res.data.explanation)
-        } catch {
-          setExplainText('Could not load explanation. Please try again.')
-        } finally {
-          setExplainLoading(false)
-        }
+        return
+      }
+      // 2. Check localStorage (persists across restarts — no token cost)
+      const stored = localStorage.getItem(cacheKey)
+      if (stored) {
+        explainCache[cacheKey] = stored
+        setExplainText(stored)
+        return
+      }
+      // 3. Fetch from AI (first time only — save to both caches)
+      setExplainLoading(true)
+      try {
+        const res = await aiApi.explain(ref, text, explainLang)
+        const explanation = res.data.explanation
+        explainCache[cacheKey] = explanation
+        try { localStorage.setItem(cacheKey, explanation) } catch {}
+        setExplainText(explanation)
+      } catch {
+        setExplainText('Could not load explanation. Please try again.')
+      } finally {
+        setExplainLoading(false)
       }
     }
   }
