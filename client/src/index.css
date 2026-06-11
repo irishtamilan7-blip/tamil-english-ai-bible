@@ -12,11 +12,46 @@ html, body, #root {
   height: 100%;
   margin: 0;
   padding: 0;
+  /* Fill the whole screen including notch area */
+  background-color: var(--cream);
 }
 
 body {
   background-color: var(--cream);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* Prevent horizontal scroll on mobile */
+  overflow-x: hidden;
+}
+
+/* ── iOS Safe Area ──────────────────────────────────────────────────────── */
+/* The bottom nav needs to clear the iPhone home indicator */
+.safe-area-bottom {
+  padding-bottom: max(env(safe-area-inset-bottom), 0px);
+}
+
+.safe-area-top {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+/* ── Prevent iOS input zoom (inputs < 16px cause Safari to zoom) ───────── */
+input, textarea, select {
+  font-size: 16px !important;
+}
+
+/* ── iOS momentum scroll ─────────────────────────────────────────────── */
+.overflow-y-auto, .overflow-y-scroll, [class*="overflow-y"] {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ── Prevent iOS rubber-band bounce on fixed elements ───────────────── */
+html {
+  overscroll-behavior: none;
+}
+
+/* ── Better tap highlight on mobile ─────────────────────────────────── */
+* {
+  -webkit-tap-highlight-color: transparent;
 }
 
 /* Tamil font rendering */

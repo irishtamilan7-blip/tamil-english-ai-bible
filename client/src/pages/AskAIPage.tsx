@@ -74,7 +74,7 @@ export default function AskAIPage() {
   }
 
   return (
-    <div className="flex flex-col" style={{ height: '100dvh', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+    <div className="flex flex-col" style={{ height: '100%' }}>
       {/* Header */}
       <div className="shrink-0 bg-white border-b border-cream-300 px-4 py-3 flex items-center gap-2">
         <button onClick={() => navigate(-1)} className="p-1 text-gray-600 hover:text-maroon-700">

@@ -16,6 +16,7 @@ app.use(express.urlencoded({ extended: true }))
 
 // Routes
 app.use('/health', require('./routes/health'))
+app.use('/privacy-policy', require('./routes/privacy'))
 app.use('/api/bible', require('./routes/bible'))
 app.use('/api/voice', require('./routes/voice'))
 app.use('/api/contact', require('./routes/contact'))

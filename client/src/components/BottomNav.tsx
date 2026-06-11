@@ -12,7 +12,10 @@ const tabs = [
 
 export default function BottomNav() {
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-cream-300 safe-area-bottom">
+    <nav
+      className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-cream-300"
+      style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+    >
       <div className="flex">
         {tabs.map((tab) => (
           <NavLink
@@ -21,7 +24,7 @@ export default function BottomNav() {
             end={tab.href === '/'}
             className={({ isActive }) =>
               clsx(
-                'flex-1 flex flex-col items-center py-2 gap-0.5 text-xs font-medium',
+                'flex-1 flex flex-col items-center py-2.5 gap-0.5 text-xs font-medium min-h-0',
                 isActive ? 'text-maroon-700' : 'text-gray-500'
               )
             }

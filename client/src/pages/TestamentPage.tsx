@@ -2,33 +2,30 @@ import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { ChevronLeft } from 'lucide-react'
 import { bibleApi } from '../utils/api'
-
-interface Book {
-  id: number
-  name_english: string
-  name_tamil: string
-  chapter_count: number
-  testament: string
-}
-
-const booksCache: Partial<Record<string, Book[]>> = {}
+import bookCache from '../utils/bookCache'
+import testamentBooksCache, { BookMeta } from '../utils/testamentBooksCache'
 
 export default function TestamentPage() {
   const { type } = useParams<{ type: 'old' | 'new' }>()
-  const cached = booksCache[type ?? '']
-  const [books, setBooks] = useState<Book[]>(cached ?? [])
+  const cached = testamentBooksCache[type ?? '']
+  const [books, setBooks] = useState<BookMeta[]>(cached ?? [])
   const [loading, setLoading] = useState(!cached)
 
   useEffect(() => {
-    if (cached) return
+    if (testamentBooksCache[type ?? '']) return
     bibleApi.getBooks('english')
       .then((res) => {
-        const filtered = res.data.books.filter((b: Book) => b.testament === type)
-        booksCache[type ?? ''] = filtered
-        setBooks(filtered)
+        const all: BookMeta[] = res.data.books
+        // Store both testaments at once so the other tab is also instant
+        const old = all.filter(b => b.testament === 'old')
+        const nw  = all.filter(b => b.testament === 'new')
+        testamentBooksCache['old'] = old
+        testamentBooksCache['new'] = nw
+        all.forEach(b => { bookCache[b.id] = b })
+        setBooks(type === 'old' ? old : nw)
       })
       .finally(() => setLoading(false))
-  }, [type, cached])
+  }, [type])
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-5">

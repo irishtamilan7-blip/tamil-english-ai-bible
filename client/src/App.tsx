@@ -16,6 +16,8 @@ import WeeklyTopicsPage from './pages/WeeklyTopicsPage'
 import NotesPage from './pages/NotesPage'
 import HighlightsPage from './pages/HighlightsPage'
 import AboutPage from './pages/AboutPage'
+import AskAIPage from './pages/AskAIPage'
+import ReadingPlanPage from './pages/ReadingPlanPage'
 
 export default function App() {
   const { theme } = useAppStore()
@@ -53,6 +55,8 @@ export default function App() {
         <Route path="/notes" element={<NotesPage />} />
         <Route path="/highlights" element={<HighlightsPage />} />
         <Route path="/about" element={<AboutPage />} />
+        <Route path="/ai" element={<AskAIPage />} />
+        <Route path="/plan" element={<ReadingPlanPage />} />
       </Route>
     </Routes>
   )

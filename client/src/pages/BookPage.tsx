@@ -4,40 +4,42 @@ import { ChevronLeft, X } from 'lucide-react'
 import { clsx } from 'clsx'
 import { bibleApi } from '../utils/api'
 import { useAppStore } from '../store/useAppStore'
-
-interface Book {
-  id: number
-  name_english: string
-  name_tamil: string
-  chapter_count: number
-  testament: string
-}
-
-const bookCache: Record<string, Book> = {}
+import chapterCache from '../utils/chapterCache'
+import bookCache from '../utils/bookCache'
 
 export default function BookPage() {
   const { bookId } = useParams()
   const navigate = useNavigate()
   const setSheetOpen = useAppStore((s) => s.setSheetOpen)
-  const cached = bookId ? bookCache[bookId] : null
-  const [book, setBook] = useState<Book | null>(cached ?? null)
+  const { language, bibleVersion } = useAppStore()
+  const lang = language === 'bilingual' ? 'english' : language
+  const _initBook = bookId ? (bookCache[parseInt(bookId)] ?? null) : null
+  const [book, setBook] = useState(_initBook)
   const [selectedChapter, setSelectedChapter] = useState<number | null>(null)
   const [verseCount, setVerseCount] = useState<number>(30)
 
   useEffect(() => {
-    if (!bookId || cached) return
+    if (!bookId || bookCache[parseInt(bookId)]) return
     bibleApi.getBook(parseInt(bookId))
-      .then((res) => { bookCache[bookId] = res.data; setBook(res.data) })
+      .then((res) => { bookCache[parseInt(bookId)] = res.data; setBook(res.data) })
       .catch(() => {})
-  }, [bookId, cached])
+  }, [bookId])
 
   useEffect(() => {
     if (!selectedChapter || !bookId) return
-    // Show sheet instantly with default count, fetch real count in background
-    bibleApi.getChapter(parseInt(bookId), selectedChapter)
-      .then((res) => setVerseCount(res.data.verses?.length ?? res.data.total_verses ?? 30))
+    const cacheKey = `${bookId}-${selectedChapter}-${lang}-${language === 'bilingual'}-${bibleVersion}`
+    if (chapterCache[cacheKey]) {
+      setVerseCount(chapterCache[cacheKey].verses?.length ?? 30)
+      return
+    }
+    // Prefetch full chapter with user's language/version — ReadPage will load instantly from cache
+    bibleApi.getChapter(parseInt(bookId), selectedChapter, lang, language === 'bilingual', bibleVersion)
+      .then((res) => {
+        chapterCache[cacheKey] = res.data
+        setVerseCount(res.data.verses?.length ?? res.data.total_verses ?? 30)
+      })
       .catch(() => {})
-  }, [selectedChapter, bookId])
+  }, [selectedChapter, bookId, lang, language, bibleVersion])
 
   useEffect(() => {
     setSheetOpen(!!selectedChapter)
@@ -80,7 +82,7 @@ export default function BookPage() {
     <div className="max-w-2xl mx-auto px-4 py-5">
       {/* Header */}
       <div className="flex items-center gap-2 mb-5">
-        <button onClick={() => navigate(-1)} className="p-2 -ml-2 text-gray-600 hover:text-maroon-700">
+        <button onClick={() => navigate(`/testament/${book.testament}`)} className="p-2 -ml-2 text-gray-600 hover:text-maroon-700">
           <ChevronLeft className="h-5 w-5" />
         </button>
         <div>
@@ -94,13 +96,21 @@ export default function BookPage() {
       <p className="text-xs text-gray-400 mb-3">Tap a chapter to select a verse</p>
 
       {/* Chapter grid */}
-      <div className="flex flex-wrap gap-2">
+      <div className="grid grid-cols-6 gap-2">
         {Array.from({ length: book.chapter_count }, (_, i) => i + 1).map((ch) => (
           <button
             key={ch}
+            onTouchStart={() => {
+              const cacheKey = `${bookId}-${ch}-${lang}-${language === 'bilingual'}-${bibleVersion}`
+              if (!chapterCache[cacheKey]) {
+                bibleApi.getChapter(parseInt(bookId!), ch, lang, language === 'bilingual', bibleVersion)
+                  .then((res) => { chapterCache[cacheKey] = res.data })
+                  .catch(() => {})
+              }
+            }}
             onClick={() => handleChapterTap(ch)}
             className={clsx(
-              'w-12 h-12 flex items-center justify-center rounded-xl text-sm font-medium transition-colors',
+              'h-12 flex items-center justify-center rounded-xl text-sm font-medium transition-colors',
               selectedChapter === ch
                 ? 'bg-maroon-700 text-white'
                 : 'bg-white border border-cream-300 text-maroon-700 hover:bg-maroon-700 hover:text-white'
@@ -122,9 +132,12 @@ export default function BookPage() {
             {/* Sheet header */}
             <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-cream-300" style={{ flexShrink: 0 }}>
               <div>
-                <p className="font-semibold text-maroon-700 text-base">
+                <button
+                  onClick={closeSheet}
+                  className="font-semibold text-maroon-700 text-base text-left min-h-0 min-w-0 hover:underline"
+                >
                   {book.name_english} — Chapter {selectedChapter}
-                </p>
+                </button>
                 <p className="text-xs text-gray-500 mt-0.5">
                   {verseCount} verses · <button
                     onClick={() => { setSheetOpen(false); navigate(`/read/${bookId}/${selectedChapter}`) }}

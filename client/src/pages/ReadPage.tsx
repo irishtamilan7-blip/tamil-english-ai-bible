@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { useParams, useSearchParams, useNavigate } from 'react-router-dom'
+import { useParams, useSearchParams, useNavigate, Navigate } from 'react-router-dom'
 import { ChevronLeft, ChevronRight, Settings2, Link2, Volume2, VolumeX, BookOpen, X, MoreVertical } from 'lucide-react'
 import { clsx } from 'clsx'
+import { Capacitor } from '@capacitor/core'
+import { TextToSpeech } from '@capacitor-community/text-to-speech'
 import { bibleApi } from '../utils/api'
 import { useAppStore } from '../store/useAppStore'
+import chapterCache from '../utils/chapterCache'
 import VerseActionBar from '../components/VerseActionBar'
 import TextSettingsModal from '../components/TextSettingsModal'
 import { useHighlightStore } from '../store/useHighlightStore'
@@ -11,7 +14,7 @@ import { useNoteStore } from '../store/useNoteStore'
 import { useReadingPlanStore } from '../store/useReadingPlanStore'
 import { getPlan } from '../utils/readingPlan'
 
-const chapterCache: Record<string, ChapterData> = {}
+// chapterCache imported from ../utils/chapterCache (shared with BookPage for prefetch)
 
 interface Verse { verse_no: number; text: string }
 interface ChapterData {
@@ -41,8 +44,16 @@ export default function ReadPage() {
 
   const { language, fontSize, lineSpacing, fontFamily, setLastRead, lastRead, bibleVersion, setBibleVersion, elevenLabsKey, elevenLabsVoiceId } = useAppStore()
 
-  const [chapter, setChapter]         = useState<ChapterData | null>(null)
-  const [loading, setLoading]         = useState(true)
+  // Synchronous cache check — if BookPage prefetched this chapter, render it immediately with no spinner
+  const _initLang = language === 'bilingual' ? 'english' : language
+  const _initKey = bookId && chapterNo ? `${bookId}-${chapterNo}-${_initLang}-${language === 'bilingual'}-${bibleVersion}` : ''
+  const _initChapter: ChapterData | null = _initKey ? (chapterCache[_initKey] as ChapterData ?? null) : null
+
+  const [chapter, setChapter]         = useState<ChapterData | null>(_initChapter)
+  const [loading, setLoading]         = useState(!_initChapter)
+  const [loadError, setLoadError]     = useState(false)
+  const [loadingSlow, setLoadingSlow] = useState(false)
+  const slowTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [selectedVerse, setSelectedVerse] = useState<number | null>(null)
   const [showSettings, setShowSettings]   = useState(false)
   const [copiedVerse, setCopiedVerse]     = useState<number | null>(null)
@@ -131,35 +142,83 @@ export default function ReadPage() {
     )
   }
 
-  // /read with no params → go to last-read chapter or John 1 by default
-  useEffect(() => {
-    if (!bookId || !chapterNo) {
-      const b = lastRead?.bookId   ?? 43
-      const c = lastRead?.chapterNo ?? 1
-      navigate(`/read/${b}/${c}`, { replace: true })
-    }
-  }, [bookId, chapterNo, navigate, lastRead])
+  // /read with no params → redirect handled below via <Navigate> before render
 
   const loadChapter = useCallback(async (bId: string, chId: string) => {
     stopAudio()
     setSelectedVerse(null)
+    if (slowTimer.current) clearTimeout(slowTimer.current)
+
     const cacheKey = `${bId}-${chId}-${lang}-${language === 'bilingual'}-${bibleVersion}`
     const cached = chapterCache[cacheKey]
     if (cached) {
       setChapter(cached)
       setLoading(false)
+      setLoadingSlow(false)
       document.querySelector('main')?.scrollTo({ top: 0 })
       setLastRead({ bookId: parseInt(bId), bookName: cached.book_name_english, chapterNo: parseInt(chId) })
+      ;([ ['english', false], ['tamil', false], ['english', true] ] as Array<[string, boolean]>).forEach(([vLang, vBilingual]) => {
+        if (vLang === lang && vBilingual === (language === 'bilingual')) return
+        const vKey = `${bId}-${chId}-${vLang}-${vBilingual}-${bibleVersion}`
+        if (chapterCache[vKey]) return
+        bibleApi.getChapter(parseInt(bId), parseInt(chId), vLang, vBilingual, bibleVersion).then((r) => { chapterCache[vKey] = r.data }).catch(() => {})
+      })
+      const chNo = parseInt(chId)
+      if (cached.has_prev) {
+        const pk = `${bId}-${chNo - 1}-${lang}-${language === 'bilingual'}-${bibleVersion}`
+        if (!chapterCache[pk]) bibleApi.getChapter(parseInt(bId), chNo - 1, lang, language === 'bilingual', bibleVersion).then(r => { chapterCache[pk] = r.data }).catch(() => {})
+      }
+      if (cached.has_next) {
+        const nk = `${bId}-${chNo + 1}-${lang}-${language === 'bilingual'}-${bibleVersion}`
+        if (!chapterCache[nk]) bibleApi.getChapter(parseInt(bId), chNo + 1, lang, language === 'bilingual', bibleVersion).then(r => { chapterCache[nk] = r.data }).catch(() => {})
+      }
       return
     }
-    try {
-      const res = await bibleApi.getChapter(parseInt(bId), parseInt(chId), lang, language === 'bilingual', bibleVersion)
-      chapterCache[cacheKey] = res.data
-      setChapter(res.data)
-      setLastRead({ bookId: parseInt(bId), bookName: res.data.book_name_english, chapterNo: parseInt(chId) })
-      document.querySelector('main')?.scrollTo({ top: 0 })
-    } catch (err) { console.error(err) }
-    finally { setLoading(false) }
+
+    // Cache miss — show spinner and fetch
+    setChapter(null)
+    setLoading(true)
+    setLoadingSlow(false)
+    slowTimer.current = setTimeout(() => setLoadingSlow(true), 8000)
+
+    let loaded = false
+    let lastErr: unknown
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        const res = await bibleApi.getChapter(parseInt(bId), parseInt(chId), lang, language === 'bilingual', bibleVersion, 12000)
+        if (slowTimer.current) clearTimeout(slowTimer.current)
+        chapterCache[cacheKey] = res.data
+        ;([ ['english', false], ['tamil', false], ['english', true] ] as Array<[string, boolean]>).forEach(([vLang, vBilingual]) => {
+          if (vLang === lang && vBilingual === (language === 'bilingual')) return
+          const vKey = `${bId}-${chId}-${vLang}-${vBilingual}-${bibleVersion}`
+          if (chapterCache[vKey]) return
+          bibleApi.getChapter(parseInt(bId), parseInt(chId), vLang, vBilingual, bibleVersion).then((r) => { chapterCache[vKey] = r.data }).catch(() => {})
+        })
+        const chNo = parseInt(chId)
+        if (res.data.has_prev) {
+          const pk = `${bId}-${chNo - 1}-${lang}-${language === 'bilingual'}-${bibleVersion}`
+          if (!chapterCache[pk]) bibleApi.getChapter(parseInt(bId), chNo - 1, lang, language === 'bilingual', bibleVersion).then(r => { chapterCache[pk] = r.data }).catch(() => {})
+        }
+        if (res.data.has_next) {
+          const nk = `${bId}-${chNo + 1}-${lang}-${language === 'bilingual'}-${bibleVersion}`
+          if (!chapterCache[nk]) bibleApi.getChapter(parseInt(bId), chNo + 1, lang, language === 'bilingual', bibleVersion).then(r => { chapterCache[nk] = r.data }).catch(() => {})
+        }
+        setChapter(res.data)
+        setLastRead({ bookId: parseInt(bId), bookName: res.data.book_name_english, chapterNo: parseInt(chId) })
+        document.querySelector('main')?.scrollTo({ top: 0 })
+        setLoadError(false)
+        setLoadingSlow(false)
+        loaded = true
+        break
+      } catch (err) {
+        lastErr = err
+        if (attempt < 3) await new Promise(r => setTimeout(r, 800 * attempt))
+      }
+    }
+    if (slowTimer.current) clearTimeout(slowTimer.current)
+    if (!loaded) { console.error('loadChapter failed:', lastErr); setLoadError(true) }
+    setLoading(false)
+    setLoadingSlow(false)
   }, [lang, language, bibleVersion, setLastRead])
 
   useEffect(() => {
@@ -187,12 +246,17 @@ export default function ReadPage() {
   }, [targetVerse, chapter, loading])
 
   // Cleanup on unmount
-  useEffect(() => () => stopAudio(), [])
+  useEffect(() => () => {
+    stopAudio()
+    if (slowTimer.current) clearTimeout(slowTimer.current)
+  }, [])
+
+  const isNative = Capacitor.isNativePlatform()
 
   // ── Audio ──────────────────────────────────────────────────────────────────
   function stopAudio() {
     if (iosTimer.current) { clearInterval(iosTimer.current); iosTimer.current = null }
-    speechSynthesis.cancel()
+    if (isNative) { TextToSpeech.stop().catch(() => {}) } else { window.speechSynthesis?.cancel() }
     if (abortCtrl.current) { abortCtrl.current.abort(); abortCtrl.current = null }
     if (audioElRef.current) { audioElRef.current.pause(); audioElRef.current.src = ''; audioElRef.current = null }
     setAudioPlaying(false)
@@ -245,11 +309,37 @@ export default function ReadPage() {
     }
   }
 
+  async function speakAtNative(verses: Verse[], idx: number) {
+    if (idx >= verses.length) { stopAudio(); return }
+    const v = verses[idx]
+    setAudioVerse(v.verse_no)
+    setTimeout(() => verseRefs.current.get(v.verse_no)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 80)
+    const isTamil = language === 'tamil'
+    try {
+      await TextToSpeech.speak({
+        text: cleanForSpeech(v.text, isTamil),
+        lang: isTamil ? 'ta-IN' : 'en-IN',
+        rate: isTamil ? 0.82 : 0.88,
+        pitch: 1.0,
+        volume: 1.0,
+        category: 'ambient',
+      })
+      speakAtNative(verses, idx + 1)
+    } catch {
+      stopAudio()
+    }
+  }
+
   function speakAt(verses: Verse[], idx: number) {
     if (idx >= verses.length) { stopAudio(); return }
 
     if (elevenLabsKey && elevenLabsVoiceId) {
       speakAtElevenLabs(verses, idx)
+      return
+    }
+
+    if (isNative) {
+      speakAtNative(verses, idx)
       return
     }
 
@@ -263,18 +353,18 @@ export default function ReadPage() {
     utter.rate  = isTamil ? 0.82 : 0.88
     utter.onend   = () => speakAt(verses, idx + 1)
     utter.onerror = (e: SpeechSynthesisErrorEvent) => { if (e.error !== 'interrupted') stopAudio() }
-    speechSynthesis.speak(utter)
+    window.speechSynthesis?.speak(utter)
   }
 
   function toggleAudio() {
     if (audioPlaying) { stopAudio(); return }
     if (!chapter) return
-    if (!elevenLabsKey && !('speechSynthesis' in window)) { alert('Text-to-speech not supported in this browser.'); return }
+    if (!elevenLabsKey && !isNative && !('speechSynthesis' in window)) { alert('Text-to-speech not supported in this browser.'); return }
     setAudioPlaying(true)
-    if (!elevenLabsKey) {
+    if (!elevenLabsKey && !isNative) {
       // iOS watchdog: resume Web Speech if it pauses itself
       iosTimer.current = setInterval(() => {
-        if (speechSynthesis.speaking && speechSynthesis.paused) speechSynthesis.resume()
+        if (window.speechSynthesis?.speaking && window.speechSynthesis?.paused) window.speechSynthesis.resume()
       }, 5000)
     }
     speakAt(chapter.verses, 0)
@@ -385,8 +475,7 @@ export default function ReadPage() {
       el.classList.add('verse-flash')
       setTimeout(() => el.classList.remove('verse-flash'), 1500)
     }
-    const newUrl = `/read/${bookId}/${chapterNo}?verse=${verseNo}`
-    window.history.replaceState(null, '', newUrl)
+    navigate(`/read/${bookId}/${chapterNo}?verse=${verseNo}`, { replace: true })
     const ref = `${chapter.book_name_english} ${chapterNo}:${verseNo}`
     const refTamil = `${chapter.book_name_tamil} ${chapterNo}:${verseNo}`
     const copyText = `${ref} (${refTamil})\n${chapter.verses.find(v => v.verse_no === verseNo)?.text || ''}`
@@ -397,10 +486,29 @@ export default function ReadPage() {
     setTimeout(() => setCopiedVerse(null), 2000)
   }
 
+  // No bookId/chapterNo → redirect immediately (no spinner flash)
+  if (!bookId || !chapterNo) {
+    return <Navigate to={`/read/${lastRead?.bookId ?? 43}/${lastRead?.chapterNo ?? 1}`} replace />
+  }
+
+  if (loadError) return (
+    <div className="flex flex-col items-center justify-center h-full gap-4 px-6 text-center">
+      <p className="text-maroon-700 font-semibold text-lg">Could not load chapter</p>
+      <p className="text-sm text-gray-500">Check your internet connection and try again.</p>
+      <button
+        className="px-6 py-3 bg-maroon-700 text-white rounded-xl text-sm font-semibold"
+        onClick={() => { setLoadError(false); setLoading(true); if (bookId && chapterNo) loadChapter(bookId, chapterNo) }}
+      >
+        Retry
+      </button>
+      <button className="text-sm text-gray-400 underline" onClick={() => navigate(`/book/${bookId}`)}>Go back</button>
+    </div>
+  )
+
   if (!chapter) return (
-    <div className="max-w-2xl mx-auto animate-pulse">
+    <div className="max-w-2xl mx-auto">
       {/* Header skeleton */}
-      <div className="sticky top-0 z-30 bg-white border-b border-cream-300 px-4 py-3 flex items-center gap-2">
+      <div className="sticky top-0 z-30 bg-white border-b border-cream-300 px-4 py-3 flex items-center gap-2 animate-pulse">
         <div className="w-6 h-6 bg-cream-200 rounded" />
         <div className="flex-1 flex flex-col items-center gap-1">
           <div className="h-3.5 w-32 bg-cream-200 rounded" />
@@ -409,14 +517,10 @@ export default function ReadPage() {
         <div className="w-8 h-6 bg-cream-200 rounded" />
         <div className="w-6 h-6 bg-cream-200 rounded" />
       </div>
-      {/* Verse skeleton lines */}
-      <div className="px-4 pt-5 space-y-3">
-        {Array.from({ length: 12 }).map((_, i) => (
-          <div key={i} className="space-y-1.5">
-            <div className="h-3 rounded bg-cream-200" style={{ width: `${70 + (i % 4) * 8}%` }} />
-            <div className="h-3 rounded bg-cream-100" style={{ width: `${50 + (i % 3) * 12}%` }} />
-          </div>
-        ))}
+      <div className="flex flex-col items-center justify-center gap-3 pt-16 px-6 text-center">
+        <div className="h-8 w-8 border-2 border-maroon-700 border-t-transparent rounded-full animate-spin" />
+        <p className="text-sm text-gray-500">Loading verses…</p>
+        {loadingSlow && <p className="text-xs text-gray-400">Check your internet connection</p>}
       </div>
     </div>
   )
@@ -426,16 +530,27 @@ export default function ReadPage() {
 
       {/* ── Sticky header ───────────────────────────────────────────────── */}
       <div className="sticky top-0 z-30 bg-white border-b border-cream-300 px-4 py-3 flex items-center gap-2">
-        <button onClick={() => navigate(-1)} className="p-1 text-gray-600 hover:text-maroon-700 shrink-0">
+        <button onClick={() => navigate(`/book/${bookId}`)} className="p-1 text-gray-600 hover:text-maroon-700 shrink-0">
           <ChevronLeft className="h-5 w-5" />
         </button>
-        <div className="flex-1 min-w-0 text-center">
+        <button onClick={() => navigate(`/book/${bookId}`)} className="flex-1 min-w-0 text-center min-h-0">
           <p className="font-semibold text-maroon-700 text-sm truncate">{chapter.book_name_english} {chapter.chapter_no}</p>
           <p className="text-xs text-gray-500 font-tamil truncate">{chapter.book_name_tamil}</p>
-        </div>
+        </button>
         {/* Language badge — always visible, tap to open language sheet */}
         <button
-          onClick={() => setShowLangMenu(true)}
+          onClick={() => {
+            setShowLangMenu(true)
+            // Prefetch all available versions for this chapter so switching is instant
+            if (bookId && chapterNo) {
+              versionCatalog.filter(v => v.available && v.id !== bibleVersion).forEach(v => {
+                const vKey = `${bookId}-${chapterNo}-${lang}-${language === 'bilingual'}-${v.id}`
+                if (!chapterCache[vKey]) {
+                  bibleApi.getChapter(parseInt(bookId), parseInt(chapterNo), lang, language === 'bilingual', v.id).then(r => { chapterCache[vKey] = r.data }).catch(() => {})
+                }
+              })
+            }
+          }}
           className="shrink-0 px-2 py-1 text-xs font-bold bg-maroon-100 text-maroon-700 rounded-lg hover:bg-maroon-700 hover:text-white transition-colors"
           title="Change language"
         >
@@ -455,28 +570,22 @@ export default function ReadPage() {
       </div>
 
       {/* ── Audio now-reading bar ────────────────────────────────────────── */}
-      {audioPlaying && (
-        <div className="sticky top-[57px] z-20 bg-maroon-700 text-white px-4 py-1.5 flex items-center justify-between text-xs">
-          <div className="flex items-center gap-2">
-            <div className="flex gap-0.5 items-end h-4">
-              {[3,5,7,4,6].map((h, i) => (
-                <div key={i} className="w-0.5 bg-white/80 rounded-full animate-bounce" style={{ height: h, animationDelay: `${i * 0.12}s` }} />
-              ))}
-            </div>
-            Reading verse <span className="font-bold">{audioVerse}</span>…
-          </div>
-          <button onClick={stopAudio} className="underline opacity-80 hover:opacity-100">Stop</button>
-        </div>
-      )}
-
-      {/* ── Language row (sticky, below header + optional audio bar) ───── */}
+      {/* ── Language row (sticky, below header) ───── */}
       <div className={clsx(
-        'sticky z-20 flex border-b border-cream-300 bg-cream-100',
-        audioPlaying ? 'top-[89px]' : 'top-[57px]'
+        'sticky top-[57px] z-20 flex border-b border-cream-300 bg-cream-100',
       )}>
         {(['english', 'tamil', 'bilingual'] as const).map((m) => (
           <button
             key={m}
+            onTouchStart={() => {
+              if (m === language) return
+              const vLang = m === 'bilingual' ? 'english' : m
+              const vBilingual = m === 'bilingual'
+              if (!bookId || !chapterNo) return
+              const vKey = `${bookId}-${chapterNo}-${vLang}-${vBilingual}-${bibleVersion}`
+              if (chapterCache[vKey]) return
+              bibleApi.getChapter(parseInt(bookId), parseInt(chapterNo), vLang, vBilingual, bibleVersion).then((r) => { chapterCache[vKey] = r.data }).catch(() => {})
+            }}
             onClick={() => useAppStore.getState().setLanguage(m)}
             className={clsx(
               'flex-1 py-2 text-xs font-medium transition-colors',
@@ -591,7 +700,7 @@ export default function ReadPage() {
                   }
                 }}
                 className={clsx(
-                  'flex gap-3 rounded-xl px-3 py-2.5 transition-colors select-none',
+                  'flex gap-2 rounded-xl px-3 py-2.5 transition-colors select-none',
                   audioVerse === v.verse_no  ? 'border border-gold-500 ring-1 ring-gold-400' :
                   selectedVerse === v.verse_no ? 'border border-gold-500' : 'border border-transparent'
                 )}
@@ -612,7 +721,7 @@ export default function ReadPage() {
                   {vHasNote && <span className="text-[9px] leading-none">📝</span>}
                 </div>
                 <span
-                  className={clsx('text-gray-800 flex-1', fontClass, lineSpacingClass, language === 'tamil' && 'font-tamil')}
+                  className={clsx('text-gray-800 flex-1 min-w-0', fontClass, lineSpacingClass, language === 'tamil' && 'font-tamil')}
                   style={{ fontSize }}
                 >
                   {language === 'english' ? renderWords(v.text) : v.text}
@@ -620,7 +729,7 @@ export default function ReadPage() {
                 <button
                   onClick={(e) => { e.stopPropagation(); handleVerseTap(v.verse_no) }}
                   className={clsx(
-                    'shrink-0 flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-xl border transition-colors self-start min-h-0 min-w-0',
+                    'shrink-0 p-1.5 rounded-lg border transition-colors self-start min-h-0 min-w-0',
                     selectedVerse === v.verse_no
                       ? 'border-maroon-400 bg-maroon-100 text-maroon-700'
                       : 'border-maroon-200 bg-maroon-50 text-maroon-500 hover:bg-maroon-100'
@@ -628,7 +737,6 @@ export default function ReadPage() {
                   title="Options"
                 >
                   <MoreVertical className="h-4 w-4" />
-                  <span className="text-[9px] font-medium leading-none">More</span>
                 </button>
               </div>
             )})}
@@ -641,7 +749,10 @@ export default function ReadPage() {
         <button onClick={() => goChapter(-1)} className="flex items-center gap-1 text-sm text-maroon-700 font-medium">
           <ChevronLeft className="h-4 w-4" />Previous
         </button>
-        <span className="text-sm text-gray-500">Chapter {chapter.chapter_no}</span>
+        <button onClick={() => navigate(`/book/${bookId}`)} className="flex flex-col items-center min-h-0 min-w-0">
+          <span className="text-sm font-semibold text-maroon-700">{chapter.book_name_english}</span>
+          <span className="text-[10px] text-gray-400">Chapter {chapter.chapter_no}</span>
+        </button>
         <button onClick={() => goChapter(1)} className="flex items-center gap-1 text-sm text-maroon-700 font-medium">
           Next<ChevronRight className="h-4 w-4" />
         </button>
@@ -707,6 +818,13 @@ export default function ReadPage() {
                       <button
                         key={v.id}
                         disabled={!v.available}
+                        onTouchStart={() => {
+                          if (!v.available || !bookId || !chapterNo) return
+                          const vKey = `${bookId}-${chapterNo}-${lang}-${language === 'bilingual'}-${v.id}`
+                          if (!chapterCache[vKey]) {
+                            bibleApi.getChapter(parseInt(bookId), parseInt(chapterNo), lang, language === 'bilingual', v.id).then(r => { chapterCache[vKey] = r.data }).catch(() => {})
+                          }
+                        }}
                         onClick={() => { if (v.available) { setBibleVersion(v.id); setShowLangMenu(false) } }}
                         className={clsx(
                           'w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition-colors text-left',

@@ -1,17 +1,16 @@
 import { Link } from 'react-router-dom'
 import {
-  FileText, Highlighter, Users, HelpCircle,
-  BookOpen, Settings, Info, ChevronRight
+  FileText, Highlighter, BookOpen, Settings, Info, ChevronRight, Sparkles, CalendarDays
 } from 'lucide-react'
 
 const items = [
-  { href: '/notes',      icon: FileText,    label: 'Notes',             desc: 'Your verse notes',          color: 'bg-blue-100 text-blue-700'     },
-  { href: '/highlights', icon: Highlighter, label: 'Highlights',        desc: 'Highlighted verses',        color: 'bg-yellow-100 text-yellow-700' },
-  { href: '/characters', icon: Users,       label: 'Characters',        desc: 'Bible people encyclopedia', color: 'bg-purple-100 text-purple-700' },
-  { href: '/quiz',       icon: HelpCircle,  label: 'Quiz',              desc: 'Test your Bible knowledge', color: 'bg-green-100 text-green-700'   },
-  { href: '/topics',     icon: BookOpen,    label: 'Weekly Topics',     desc: 'Sermon topics & verses',    color: 'bg-orange-100 text-orange-700' },
-  { href: '/settings',   icon: Settings,    label: 'Settings',          desc: 'App preferences',           color: 'bg-gray-100 text-gray-700'     },
-  { href: '/about',      icon: Info,        label: 'About',             desc: 'App info & contact',        color: 'bg-red-50 text-maroon-700'     },
+  { href: '/ai',         icon: Sparkles,     label: 'Bible AI Chat',    desc: 'Ask anything about the Bible',    color: 'bg-maroon-100 text-maroon-700'  },
+  { href: '/plan',       icon: CalendarDays, label: 'Reading Plan',     desc: 'Read the Bible in 365 days',      color: 'bg-green-100 text-green-700'    },
+  { href: '/notes',      icon: FileText,     label: 'Notes',            desc: 'Your personal verse notes',       color: 'bg-blue-100 text-blue-700'      },
+  { href: '/highlights', icon: Highlighter,  label: 'Highlights',       desc: 'Highlighted verses',              color: 'bg-yellow-100 text-yellow-700'  },
+  { href: '/topics',     icon: BookOpen,     label: 'Weekly Topics',    desc: "Pastor's sermon topics & verses", color: 'bg-orange-100 text-orange-700'  },
+  { href: '/settings',   icon: Settings,     label: 'Settings',         desc: 'App preferences',                 color: 'bg-gray-100 text-gray-700'      },
+  { href: '/about',      icon: Info,         label: 'About',            desc: 'App info & contact',              color: 'bg-red-50 text-maroon-700'      },
 ]
 
 export default function MorePage() {

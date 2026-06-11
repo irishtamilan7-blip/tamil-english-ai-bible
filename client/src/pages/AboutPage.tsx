@@ -58,7 +58,7 @@ export default function AboutPage() {
         <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center mx-auto mb-3">
           <span className="text-3xl">📖</span>
         </div>
-        <h2 className="text-xl font-bold font-serif mb-1">BibleVoice</h2>
+        <h2 className="text-xl font-bold font-serif mb-1">Tamil English AI Bible</h2>
         <p className="text-sm text-white/70 font-tamil">விவிலியம்</p>
         <p className="text-xs text-white/60 mt-2">Version 1.0.0</p>
         <p className="text-xs text-gold-400 mt-3 italic font-serif">

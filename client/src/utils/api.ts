@@ -1,11 +1,12 @@
 import axios from 'axios'
 
+const API_BASE = import.meta.env.VITE_API_URL || '/api'
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || '/api',
-  timeout: 10000,
+  baseURL: API_BASE,
+  timeout: 12000,
 })
 
-// Auth token injection
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('bv_token')
   if (token) config.headers.Authorization = `Bearer ${token}`
@@ -14,18 +15,42 @@ api.interceptors.request.use((config) => {
 
 export default api
 
-// Bible API helpers
+// Use fetch() for Bible API calls — on Android/iOS the CapacitorHttp plugin
+// intercepts fetch() and routes it through the OS HTTP stack, bypassing WebView
+// restrictions. AbortController gives a real, reliable timeout.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function apiFetch<T = any>(path: string, params: Record<string, string>, timeout = 12000): Promise<{ data: T }> {
+  const base = API_BASE.replace(/\/$/, '')
+  const qs = new URLSearchParams(params).toString()
+  const url = `${base}${path}${qs ? '?' + qs : ''}`
+
+  const fetchPromise = fetch(url).then(async (res) => {
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    return { data: await res.json() as T }
+  })
+
+  const timeoutPromise = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error('timeout')), timeout)
+  )
+
+  return Promise.race([fetchPromise, timeoutPromise])
+}
+
 export const bibleApi = {
   getBooks: (lang = 'english') =>
-    api.get(`/bible/books?lang=${lang}`),
+    apiFetch('/bible/books', { lang }),
+
   getBook: (bookId: number, lang = 'english') =>
-    api.get(`/bible/books/${bookId}?lang=${lang}`),
-  getChapter: (bookId: number, chapterNo: number, lang = 'english', bilingual = false, version = 'bbe') =>
-    api.get(`/bible/books/${bookId}/chapters/${chapterNo}?lang=${lang}&bilingual=${bilingual}&version=${version}`),
+    apiFetch(`/bible/books/${bookId}`, { lang }),
+
+  getChapter: (bookId: number, chapterNo: number, lang = 'english', bilingual = false, version = 'bbe', timeout = 12000) =>
+    apiFetch(`/bible/books/${bookId}/chapters/${chapterNo}`, { lang, bilingual: String(bilingual), version }, timeout),
+
   search: (q: string, lang = 'english', testament = 'all', page = 1, version = 'bbe') =>
-    api.get(`/bible/search?q=${encodeURIComponent(q)}&lang=${lang}&testament=${testament}&page=${page}&version=${version}`),
+    apiFetch('/bible/search', { q, lang, testament, page: String(page), version }),
+
   getVersions: () =>
-    api.get('/bible/versions'),
+    apiFetch('/bible/versions', {}),
 }
 
 export const aiApi = {

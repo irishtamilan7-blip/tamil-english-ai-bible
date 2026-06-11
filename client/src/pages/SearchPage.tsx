@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react'
-import { useSearchParams, Link } from 'react-router-dom'
+import { useSearchParams, Link, useNavigate } from 'react-router-dom'
 import { Search, X, Clock } from 'lucide-react'
 import { bibleApi } from '../utils/api'
 import { useAppStore } from '../store/useAppStore'
+import chapterCache from '../utils/chapterCache'
+
+import { parseVerseRef } from '../utils/bibleRef'
 
 interface Result {
   lang: string
@@ -15,6 +18,7 @@ interface Result {
 }
 
 export default function SearchPage() {
+  const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const [query, setQuery] = useState(searchParams.get('q') || '')
   const [results, setResults] = useState<Result[]>([])
@@ -22,61 +26,86 @@ export default function SearchPage() {
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(false)
 
-  const { language, searchHistory, addSearchHistory, removeSearchHistory, clearSearchHistory } = useAppStore()
+  const { language, bibleVersion, searchHistory, addSearchHistory, removeSearchHistory, clearSearchHistory } = useAppStore()
+  const lang = language === 'bilingual' ? 'english' : language
+
+  function prefetchChapter(bookId: number, chapterNo: number) {
+    const key = `${bookId}-${chapterNo}-${lang}-${language === 'bilingual'}-${bibleVersion}`
+    if (chapterCache[key]) return
+    bibleApi.getChapter(bookId, chapterNo, lang, language === 'bilingual', bibleVersion)
+      .then((res) => { chapterCache[key] = res.data })
+      .catch(() => {})
+  }
 
   async function doSearch(q: string, p = 1) {
     if (q.trim().length < 2) return
     setLoading(true)
-    const lang = language === 'bilingual' ? 'english' : language
+    if (p === 1) { setResults([]); setTotal(0) }
+    // Search English always — Tamil Bible text is in Tamil script so English keywords
+    // like "love" return 0 in Tamil mode. Language only controls how results are displayed.
     try {
-      const res = await bibleApi.search(q, lang, 'all', p)
-      if (p === 1) setResults(res.data.results)
-      else setResults((prev) => [...prev, ...res.data.results])
+      const res = await bibleApi.search(q, 'english', 'all', p)
+      const newResults: Result[] = res.data.results
+      if (p === 1) setResults(newResults)
+      else setResults((prev) => [...prev, ...newResults])
       setTotal(res.data.total)
       setPage(p)
       addSearchHistory(q)
-    } catch {
-      // offline: show cached results
+      // Prefetch chapters for top results so tapping them is instant
+      newResults.slice(0, 6).forEach((r) => prefetchChapter(r.book_id, r.chapter_no))
+    } catch (err) {
+      console.error('Search failed:', err)
     } finally {
       setLoading(false)
     }
   }
 
+  // Fire search whenever URL ?q= changes (voice-search navigation, page load, history)
+  const urlQ = searchParams.get('q') || ''
   useEffect(() => {
-    const q = searchParams.get('q')
-    if (q) { setQuery(q); doSearch(q) }
-  }, [])
+    if (urlQ) { setQuery(urlQ); doSearch(urlQ) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlQ])
 
   function submit(e: React.FormEvent) {
     e.preventDefault()
     if (!query.trim()) return
-    setSearchParams({ q: query })
-    doSearch(query, 1)
+    // Check if query is a verse reference like "John 3:16"
+    const ref = parseVerseRef(query.trim())
+    if (ref) {
+      const url = ref.verse
+        ? `/read/${ref.bookId}/${ref.chapter}?verse=${ref.verse}`
+        : `/read/${ref.bookId}/${ref.chapter}`
+      navigate(url)
+      return
+    }
+    if (urlQ === query.trim()) { doSearch(query.trim(), 1); return }
+    setSearchParams({ q: query.trim() })
   }
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-5">
       {/* Search bar */}
       <form onSubmit={submit} className="flex gap-2 mb-5">
-        <div className="flex-1 flex items-center gap-2 bg-white border-2 border-cream-300 focus-within:border-maroon-700 rounded-xl px-3 transition-colors">
+        <div className="flex-1 min-w-0 flex items-center gap-2 bg-white border-2 border-cream-300 focus-within:border-maroon-700 rounded-xl px-3 transition-colors">
           <Search className="h-4 w-4 text-gray-400 shrink-0" />
           <input
-            type="search"
-            placeholder='Search Bible — "John 3:16" or "love" or "Moses"'
+            type="text"
+            placeholder='Search — "John 3:16" or "love" or "Moses"'
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            className="flex-1 py-2.5 text-sm bg-transparent outline-none placeholder:text-gray-400"
+            className="flex-1 min-w-0 py-2.5 text-sm bg-transparent outline-none placeholder:text-gray-400"
             autoFocus
           />
           {query && (
-            <button type="button" onClick={() => { setQuery(''); setResults([]) }}>
+            <button type="button" onClick={() => { setQuery(''); setResults([]); setTotal(0); setSearchParams({}) }} className="shrink-0">
               <X className="h-4 w-4 text-gray-400" />
             </button>
           )}
         </div>
         <button
           type="submit"
-          className="px-4 py-2.5 bg-maroon-700 text-white rounded-xl text-sm font-medium hover:bg-maroon-800"
+          className="shrink-0 px-4 py-2.5 bg-maroon-700 text-white rounded-xl text-sm font-medium hover:bg-maroon-800"
         >
           Search
         </button>
@@ -109,16 +138,35 @@ export default function SearchPage() {
         </div>
       )}
 
-      {/* Results count */}
-      {total > 0 && (
-        <p className="text-xs text-gray-500 mb-3">
-          {total} result{total !== 1 ? 's' : ''} for "{query}"
-          {total > 50 && ' — showing 50 at a time'}
-        </p>
+      {/* Results count — shown after any search attempt */}
+      {!loading && searchParams.get('q') && (
+        <div className="flex items-center gap-2 mb-4">
+          <span className={`text-sm font-semibold px-3 py-1 rounded-full ${
+            total > 0
+              ? 'bg-maroon-700 text-white'
+              : 'bg-gray-100 text-gray-500'
+          }`}>
+            {total} result{total !== 1 ? 's' : ''}
+          </span>
+          <span className="text-sm text-gray-500">
+            for <span className="font-medium text-gray-700">"{searchParams.get('q')}"</span>
+          </span>
+          {total > results.length && (
+            <span className="text-xs text-gray-400 ml-auto">showing {results.length} of {total}</span>
+          )}
+        </div>
+      )}
+
+      {/* No results for a query */}
+      {!loading && !results.length && searchParams.get('q') && (
+        <div className="text-center py-8 text-gray-400">
+          <p className="text-sm">No verses found for "{searchParams.get('q')}"</p>
+          <p className="text-xs mt-1">Try a different word or a shorter phrase</p>
+        </div>
       )}
 
       {/* Empty state hint */}
-      {!loading && !results.length && !searchHistory.length && (
+      {!loading && !results.length && !searchHistory.length && !searchParams.get('q') && (
         <div className="text-center py-12 text-gray-400 space-y-2">
           <Search className="h-10 w-10 mx-auto opacity-40" />
           <p className="text-sm">Try searching for:</p>
@@ -149,6 +197,7 @@ export default function SearchPage() {
           <Link
             key={`${r.book_id}-${r.chapter_no}-${r.verse_no}-${i}`}
             to={`/read/${r.book_id}/${r.chapter_no}?verse=${r.verse_no}`}
+            onTouchStart={() => prefetchChapter(r.book_id, r.chapter_no)}
             className="block bg-white border border-cream-300 rounded-xl p-4 hover:border-maroon-300 transition-colors"
           >
             <div className="flex items-center gap-2 mb-1">

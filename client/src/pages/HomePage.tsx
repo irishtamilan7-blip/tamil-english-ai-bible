@@ -3,8 +3,8 @@ import { Link } from 'react-router-dom'
 import { BookOpen, Clock, Search, Mic, CalendarDays, ChevronRight } from 'lucide-react'
 import { useAppStore } from '../store/useAppStore'
 import { bibleApi } from '../utils/api'
-
-let dailyVerseCache: { date: string; verse: DailyVerse } | null = null
+import bookCache from '../utils/bookCache'
+import testamentBooksCache from '../utils/testamentBooksCache'
 
 // Daily verse: deterministic by day-of-year
 const DAILY_VERSES = [
@@ -29,15 +29,43 @@ interface DailyVerse {
   verse: number
 }
 
+const STORAGE_KEY = 'bv_daily_verse'
+
+function loadStoredVerse(today: string): DailyVerse | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    return parsed.date === today ? parsed.verse : null
+  } catch { return null }
+}
+
+function saveVerse(today: string, verse: DailyVerse) {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ date: today, verse })) } catch {}
+}
+
+function prefetchTestaments() {
+  if (testamentBooksCache['old'] && testamentBooksCache['new']) return
+  bibleApi.getBooks('english')
+    .then((res) => {
+      const all = res.data.books
+      testamentBooksCache['old'] = all.filter((b: { testament: string }) => b.testament === 'old')
+      testamentBooksCache['new'] = all.filter((b: { testament: string }) => b.testament === 'new')
+      all.forEach((b: { id: number; name_english: string; name_tamil: string; chapter_count: number; testament: string }) => { bookCache[b.id] = b })
+    })
+    .catch(() => {})
+}
+
 export default function HomePage() {
   const { lastRead, searchHistory } = useAppStore()
   const today = new Date().toDateString()
-  const [dailyVerse, setDailyVerse] = useState<DailyVerse | null>(
-    dailyVerseCache?.date === today ? dailyVerseCache.verse : null
-  )
+  const [dailyVerse, setDailyVerse] = useState<DailyVerse | null>(() => loadStoredVerse(today))
+
+  // Prefetch book lists on mount so Old/New Testament pages open instantly
+  useEffect(() => { prefetchTestaments() }, [])
 
   useEffect(() => {
-    if (dailyVerseCache?.date === today) return
+    if (loadStoredVerse(today)) return
     const dayOfYear = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 86400000)
     const pick = DAILY_VERSES[dayOfYear % DAILY_VERSES.length]
 
@@ -56,7 +84,7 @@ export default function HomePage() {
         chapter: pick.chapter,
         verse: pick.verse,
       }
-      dailyVerseCache = { date: today, verse }
+      saveVerse(today, verse)
       setDailyVerse(verse)
     }).catch(() => {})
   }, [today])
@@ -144,6 +172,7 @@ export default function HomePage() {
         <div className="grid grid-cols-2 gap-3">
           <Link
             to="/testament/old"
+            onTouchStart={prefetchTestaments}
             className="bg-white border border-cream-300 rounded-xl p-4 text-center hover:border-maroon-300 transition-colors"
           >
             <p className="font-semibold text-maroon-700">Old Testament</p>
@@ -152,6 +181,7 @@ export default function HomePage() {
           </Link>
           <Link
             to="/testament/new"
+            onTouchStart={prefetchTestaments}
             className="bg-white border border-cream-300 rounded-xl p-4 text-center hover:border-maroon-300 transition-colors"
           >
             <p className="font-semibold text-maroon-700">New Testament</p>
