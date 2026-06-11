@@ -1,5 +1,5 @@
 [phases.install]
-cmds = ["npm install --prefix server"]
+cmds = ["npm install --prefix server/server"]
 
 [start]
-cmd = "node server/src/index.js"
+cmd = "node server/server/src/index.js"
