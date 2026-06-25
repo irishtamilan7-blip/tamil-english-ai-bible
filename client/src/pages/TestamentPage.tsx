@@ -49,7 +49,7 @@ export default function TestamentPage() {
           <h1 className="text-xl font-bold text-maroon-700 font-serif">
             {type === 'old' ? 'Old Testament' : 'New Testament'}
           </h1>
-          <p className="text-sm text-gray-500 font-tamil">
+          <p className={`text-sm text-gray-500 ${isTamil ? 'font-tamil' : ''}`}>
             {isTamil
               ? (type === 'old' ? 'பழைய ஏற்பாடு' : 'புதிய ஏற்பாடு')
               : (type === 'old' ? 'Old Testament' : 'New Testament')

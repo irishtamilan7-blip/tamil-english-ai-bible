@@ -308,15 +308,29 @@ export default function ReadPage() {
     setAudioVerse(null)
   }
 
-  function cleanForSpeech(text: string, isTamil: boolean): string {
+  // BCP-47 language codes for TTS (English fallback for unknown languages)
+  const TTS_LANG: Record<string, string> = {
+    english: 'en-IN', tamil: 'ta-IN', malayalam: 'ml-IN',
+    hindi: 'hi-IN', telugu: 'te-IN', kannada: 'kn-IN', marathi: 'mr-IN',
+    korean: 'ko-KR', japanese: 'ja-JP', chinese_simplified: 'zh-CN', chinese_traditional: 'zh-TW',
+    arabic: 'ar-SA', hebrew: 'he-IL', greek: 'el-GR',
+    spanish: 'es-ES', french: 'fr-FR', german: 'de-DE', portuguese: 'pt-BR',
+    russian: 'ru-RU', italian: 'it-IT', dutch: 'nl-NL', swedish: 'sv-SE',
+    turkish: 'tr-TR', vietnamese: 'vi-VN', thai: 'th-TH', indonesian: 'id-ID',
+  }
+  const ttsLang = TTS_LANG[language] ?? 'en-IN'
+  const isEnglish = language === 'english'
+
+  function cleanForSpeech(text: string): string {
     let t = text
     t = t.replace(/\{[^}]*\}/g, '')
-    if (isTamil) {
+    // Strip punctuation for all non-English languages (avoids "dot comma" being spoken)
+    if (!isEnglish) {
       t = t.replace(/[.,;:!?'"()\-–—\[\]{}*\/\\]/g, ' ')
     } else {
-      t = t.replace(/[\[\]]/g, '').replace(/\s{2,}/g, ' ')
+      t = t.replace(/[\[\]]/g, '')
     }
-    return t.trim()
+    return t.replace(/\s{2,}/g, ' ').trim()
   }
 
   async function speakAtElevenLabs(verses: Verse[], idx: number) {
@@ -333,7 +347,7 @@ export default function ReadPage() {
         method: 'POST',
         headers: { 'xi-api-key': elevenLabsKey, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          text: cleanForSpeech(v.text, language === 'tamil'),
+          text: cleanForSpeech(v.text),
           model_id: 'eleven_multilingual_v2',
           voice_settings: { stability: 0.5, similarity_boost: 0.75, style: 0.0 },
         }),
@@ -359,12 +373,11 @@ export default function ReadPage() {
     const v = verses[idx]
     setAudioVerse(v.verse_no)
     setTimeout(() => verseRefs.current.get(v.verse_no)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 80)
-    const isTamil = language === 'tamil'
     try {
       await TextToSpeech.speak({
-        text: cleanForSpeech(v.text, isTamil),
-        lang: isTamil ? 'ta-IN' : 'en-IN',
-        rate: isTamil ? 0.82 : 0.88,
+        text: cleanForSpeech(v.text),
+        lang: ttsLang,
+        rate: isEnglish ? 0.88 : 0.82,
         pitch: 1.0,
         volume: 1.0,
         category: 'ambient',
@@ -392,10 +405,9 @@ export default function ReadPage() {
     setAudioVerse(v.verse_no)
     setTimeout(() => verseRefs.current.get(v.verse_no)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 80)
 
-    const isTamil = language === 'tamil'
-    const utter = new SpeechSynthesisUtterance(cleanForSpeech(v.text, isTamil))
-    utter.lang  = isTamil ? 'ta-IN' : 'en-IN'
-    utter.rate  = isTamil ? 0.82 : 0.88
+    const utter = new SpeechSynthesisUtterance(cleanForSpeech(v.text))
+    utter.lang  = ttsLang
+    utter.rate  = isEnglish ? 0.88 : 0.82
     utter.onend   = () => { if (!audioStopped.current) speakAt(verses, idx + 1) }
     utter.onerror = (e: SpeechSynthesisErrorEvent) => { if (e.error !== 'interrupted') stopAudio() }
     window.speechSynthesis?.speak(utter)

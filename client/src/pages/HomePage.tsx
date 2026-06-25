@@ -88,9 +88,9 @@ export default function HomePage() {
   }, [])
 
   useEffect(() => {
-    // Clear stale verse when language changes so we re-fetch in new language
+    // Ignore cached verse if local text is empty for a non-English language (stale pre-deploy cache)
     const stored = loadStoredVerse(today, language)
-    if (stored) { setDailyVerse(stored); return }
+    if (stored && (language === 'english' || stored.textLocal)) { setDailyVerse(stored); return }
     setDailyVerse(null)
 
     const dayOfYear = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 86400000)
@@ -230,7 +230,7 @@ export default function HomePage() {
             className="bg-white border border-cream-300 rounded-xl p-4 text-center hover:border-maroon-300 transition-colors"
           >
             <p className="font-semibold text-maroon-700">Old Testament</p>
-            <p className="text-xs text-gray-500 font-tamil mt-0.5">பழைய ஏற்பாடு</p>
+            {language === 'tamil' && <p className="text-xs text-gray-500 font-tamil mt-0.5">பழைய ஏற்பாடு</p>}
             <p className="text-xs text-gray-400 mt-1">39 Books</p>
           </Link>
           <Link
@@ -239,7 +239,7 @@ export default function HomePage() {
             className="bg-white border border-cream-300 rounded-xl p-4 text-center hover:border-maroon-300 transition-colors"
           >
             <p className="font-semibold text-maroon-700">New Testament</p>
-            <p className="text-xs text-gray-500 font-tamil mt-0.5">புதிய ஏற்பாடு</p>
+            {language === 'tamil' && <p className="text-xs text-gray-500 font-tamil mt-0.5">புதிய ஏற்பாடு</p>}
             <p className="text-xs text-gray-400 mt-1">27 Books</p>
           </Link>
         </div>
