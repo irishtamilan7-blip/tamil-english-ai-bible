@@ -55,20 +55,17 @@ function saveVerse(today: string, lang: string, verse: DailyVerse) {
   try { localStorage.setItem(`${STORAGE_PREFIX}_${lang}`, JSON.stringify({ date: today, verse })) } catch {}
 }
 
-// Clear any stale cached verses that have empty textLocal (stored before server had multi-language support)
-function clearStaleCaches() {
-  try {
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i)
-      if (!key?.startsWith(STORAGE_PREFIX + '_')) continue
-      const lang = key.slice(STORAGE_PREFIX.length + 1)
-      if (lang === 'english') continue
-      const raw = localStorage.getItem(key)
-      if (!raw) continue
-      const parsed = JSON.parse(raw)
-      if (!parsed.verse?.textLocal) localStorage.removeItem(key)
-    }
-  } catch {}
+// Only return cached verse if it has valid local text (or is English)
+function loadValidVerse(today: string, lang: string): DailyVerse | null {
+  const v = loadStoredVerse(today, lang)
+  if (!v) return null
+  if (lang === 'english') return v
+  // For non-English: reject cache if textLocal is missing (stale from before multilingual server)
+  if (!v.textLocal) {
+    try { localStorage.removeItem(`${STORAGE_PREFIX}_${lang}`) } catch {}
+    return null
+  }
+  return v
 }
 
 function prefetchTestaments(lang = 'english') {
@@ -88,13 +85,10 @@ function prefetchTestaments(lang = 'english') {
 export default function HomePage() {
   const { language, setLanguage, lastRead, searchHistory } = useAppStore()
   const today = new Date().toDateString()
-  const [dailyVerse, setDailyVerse] = useState<DailyVerse | null>(() => loadStoredVerse(today, language))
+  const [dailyVerse, setDailyVerse] = useState<DailyVerse | null>(() => loadValidVerse(today, language))
   const [showLangSheet, setShowLangSheet] = useState(false)
   const [langSearch, setLangSearch]       = useState('')
   const [availableLangs, setAvailableLangs] = useState<LanguageConfig[]>(FALLBACK_LANGS)
-
-  // Clear any stale cached verses with empty textLocal (one-time cleanup on mount)
-  useEffect(() => { clearStaleCaches() }, [])
 
   // Prefetch book lists on mount so Old/New Testament pages open instantly
   useEffect(() => { prefetchTestaments(language) }, [language])
@@ -107,9 +101,8 @@ export default function HomePage() {
   }, [])
 
   useEffect(() => {
-    // Ignore cached verse if local text is empty for a non-English language (stale pre-deploy cache)
-    const stored = loadStoredVerse(today, language)
-    if (stored && (language === 'english' || stored.textLocal)) { setDailyVerse(stored); return }
+    const stored = loadValidVerse(today, language)
+    if (stored) { setDailyVerse(stored); return }
     setDailyVerse(null)
 
     const dayOfYear = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 86400000)
