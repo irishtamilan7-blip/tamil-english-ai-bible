@@ -5,7 +5,7 @@ import { clsx } from 'clsx'
 import { Capacitor } from '@capacitor/core'
 import { TextToSpeech } from '@capacitor-community/text-to-speech'
 import { bibleApi } from '../utils/api'
-import { useAppStore } from '../store/useAppStore'
+import { useAppStore, type LanguageConfig } from '../store/useAppStore'
 import chapterCache from '../utils/chapterCache'
 import VerseActionBar from '../components/VerseActionBar'
 import TextSettingsModal from '../components/TextSettingsModal'
@@ -21,6 +21,7 @@ interface ChapterData {
   book_id: number
   book_name_english: string
   book_name_tamil: string
+  book_name_local: string   // name in the currently selected language
   chapter_no: number
   verses: Verse[]
   other_lang_verses: Verse[] | null
@@ -42,11 +43,12 @@ export default function ReadPage() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
 
-  const { language, fontSize, lineSpacing, fontFamily, setLastRead, lastRead, bibleVersion, setBibleVersion, elevenLabsKey, elevenLabsVoiceId } = useAppStore()
+  const { language, showBilingual, fontSize, lineSpacing, fontFamily, setLastRead, lastRead, bibleVersion, setBibleVersion, elevenLabsKey, elevenLabsVoiceId } = useAppStore()
+
+  const isBilingual = showBilingual && language !== 'english'
 
   // Synchronous cache check — if BookPage prefetched this chapter, render it immediately with no spinner
-  const _initLang = language === 'bilingual' ? 'english' : language
-  const _initKey = bookId && chapterNo ? `${bookId}-${chapterNo}-${_initLang}-${language === 'bilingual'}-${bibleVersion}` : ''
+  const _initKey = bookId && chapterNo ? `${bookId}-${chapterNo}-${language}-${isBilingual}-${bibleVersion}` : ''
   const _initChapter: ChapterData | null = _initKey ? (chapterCache[_initKey] as ChapterData ?? null) : null
 
   const [chapter, setChapter]         = useState<ChapterData | null>(_initChapter)
@@ -61,9 +63,10 @@ export default function ReadPage() {
   // Audio TTS
   const [audioPlaying, setAudioPlaying] = useState(false)
   const [audioVerse, setAudioVerse]     = useState<number | null>(null)
-  const iosTimer   = useRef<ReturnType<typeof setInterval> | null>(null)
-  const audioElRef = useRef<HTMLAudioElement | null>(null)
-  const abortCtrl  = useRef<AbortController | null>(null)
+  const iosTimer      = useRef<ReturnType<typeof setInterval> | null>(null)
+  const audioElRef    = useRef<HTMLAudioElement | null>(null)
+  const abortCtrl     = useRef<AbortController | null>(null)
+  const audioStopped  = useRef(false)  // guard to prevent recursive TTS continuing after stop
 
   // Language / version sheet
   const [showLangMenu, setShowLangMenu] = useState(false)
@@ -71,6 +74,8 @@ export default function ReadPage() {
   // Version catalog loaded from server
   interface VersionMeta { id: string; name: string; short: string; year: number; free: boolean; available: boolean }
   const [versionCatalog, setVersionCatalog] = useState<VersionMeta[]>([])
+  const [availableLangs, setAvailableLangs] = useState<LanguageConfig[]>([])
+  const [langSearch, setLangSearch]         = useState('')
 
   // Dictionary
   const [dictWord, setDictWord]     = useState('')
@@ -83,7 +88,7 @@ export default function ReadPage() {
   const verseRefs   = useRef<Map<number, HTMLDivElement>>(new Map())
   const flashTimer  = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const lang = language === 'bilingual' ? 'english' : language
+  const lang = language
 
   const { highlights } = useHighlightStore()
   const { notes }      = useNoteStore()
@@ -96,10 +101,12 @@ export default function ReadPage() {
   const markedReadRef  = useRef(false)
 
   useEffect(() => {
-    // Reset on chapter change
+    // Reset tracking state on chapter change
+    // NOTE: do NOT reset lastVerseRef here — it's set by render ref callbacks and
+    // the plan effect reads it. Clearing it here causes a race when the chapter is
+    // served from cache (ref is set during render, then cleared before plan effect runs).
     pageEntryTime.current = Date.now()
     markedReadRef.current = false
-    lastVerseRef.current  = null
   }, [bookId, chapterNo])
 
   useEffect(() => {
@@ -112,20 +119,68 @@ export default function ReadPage() {
     )
     if (!isInPlan) return
 
-    const el = lastVerseRef.current
-    if (!el) return
+    function markRead() {
+      if (markedReadRef.current) return
+      markedReadRef.current = true
+      planStore.markChapterRead(chapter!.book_id, chapter!.chapter_no)
+    }
 
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (!entry.isIntersecting) return
-        markedReadRef.current = true
-        planStore.markChapterRead(chapter.book_id, chapter.chapter_no)
-        observer.disconnect()
-      },
-      { threshold: 0.5 }
-    )
-    observer.observe(el)
-    return () => observer.disconnect()
+    // Read lastVerseRef FRESH on every check — not once at effect start.
+    // The ref may be null at effect-run time when the chapter was served from cache
+    // (render sets it, but the bookId/chapterNo reset effect clears it in the same
+    // commit), so we let the 2s poll retry once the render has had a chance to set it.
+    function checkVisible() {
+      if (markedReadRef.current) return
+      const el = lastVerseRef.current
+      if (el) {
+        const rect = el.getBoundingClientRect()
+        // Last verse is visible above the bottom nav (~70px)
+        if (rect.bottom <= window.innerHeight - 70) { markRead(); return }
+      }
+      // Fallback: percentage scrolled on main scroll container
+      const root = document.querySelector('main')
+      if (root) {
+        const scrolled = root.scrollTop + root.clientHeight
+        const total = root.scrollHeight
+        if (total > 0 && (scrolled / total >= 0.85 || scrolled >= total - 200)) markRead()
+      }
+    }
+
+    const scrollRoot = document.querySelector('main')
+    scrollRoot?.addEventListener('scroll', checkVisible, { passive: true })
+    window.addEventListener('scroll', checkVisible, { passive: true })
+
+    // IntersectionObserver — set up now if ref is available, otherwise the poll wires it up
+    let observer: IntersectionObserver | null = null
+    function setupObserver() {
+      const el = lastVerseRef.current
+      if (!el || observer) return
+      const obs = new IntersectionObserver(
+        ([entry]) => { if (entry.isIntersecting) { markRead(); obs.disconnect() } },
+        { threshold: 0.1, root: null, rootMargin: '0px 0px -70px 0px' }
+      )
+      observer = obs
+      obs.observe(el)
+    }
+    setupObserver()
+
+    // Check immediately (catches short chapters already fully visible)
+    checkVisible()
+
+    // Poll every 2s: handles WKWebView scroll-event gaps AND the cached-chapter case
+    // where lastVerseRef is null at effect-run time but set 1 render later
+    const pollId = setInterval(() => {
+      if (markedReadRef.current) { clearInterval(pollId); return }
+      setupObserver()  // wire up observer as soon as el is available
+      checkVisible()
+    }, 2000)
+
+    return () => {
+      observer?.disconnect()
+      scrollRoot?.removeEventListener('scroll', checkVisible)
+      window.removeEventListener('scroll', checkVisible)
+      clearInterval(pollId)
+    }
   }, [chapter, planStore, planStore.startDate])
 
   function getHighlightColor(verseNo: number): string | undefined {
@@ -149,7 +204,7 @@ export default function ReadPage() {
     setSelectedVerse(null)
     if (slowTimer.current) clearTimeout(slowTimer.current)
 
-    const cacheKey = `${bId}-${chId}-${lang}-${language === 'bilingual'}-${bibleVersion}`
+    const cacheKey = `${bId}-${chId}-${lang}-${isBilingual}-${bibleVersion}`
     const cached = chapterCache[cacheKey]
     if (cached) {
       setChapter(cached)
@@ -157,20 +212,14 @@ export default function ReadPage() {
       setLoadingSlow(false)
       document.querySelector('main')?.scrollTo({ top: 0 })
       setLastRead({ bookId: parseInt(bId), bookName: cached.book_name_english, chapterNo: parseInt(chId) })
-      ;([ ['english', false], ['tamil', false], ['english', true] ] as Array<[string, boolean]>).forEach(([vLang, vBilingual]) => {
-        if (vLang === lang && vBilingual === (language === 'bilingual')) return
-        const vKey = `${bId}-${chId}-${vLang}-${vBilingual}-${bibleVersion}`
-        if (chapterCache[vKey]) return
-        bibleApi.getChapter(parseInt(bId), parseInt(chId), vLang, vBilingual, bibleVersion).then((r) => { chapterCache[vKey] = r.data }).catch(() => {})
-      })
       const chNo = parseInt(chId)
       if (cached.has_prev) {
-        const pk = `${bId}-${chNo - 1}-${lang}-${language === 'bilingual'}-${bibleVersion}`
-        if (!chapterCache[pk]) bibleApi.getChapter(parseInt(bId), chNo - 1, lang, language === 'bilingual', bibleVersion).then(r => { chapterCache[pk] = r.data }).catch(() => {})
+        const pk = `${bId}-${chNo - 1}-${lang}-${isBilingual}-${bibleVersion}`
+        if (!chapterCache[pk]) bibleApi.getChapter(parseInt(bId), chNo - 1, lang, isBilingual, bibleVersion).then(r => { chapterCache[pk] = r.data }).catch(() => {})
       }
       if (cached.has_next) {
-        const nk = `${bId}-${chNo + 1}-${lang}-${language === 'bilingual'}-${bibleVersion}`
-        if (!chapterCache[nk]) bibleApi.getChapter(parseInt(bId), chNo + 1, lang, language === 'bilingual', bibleVersion).then(r => { chapterCache[nk] = r.data }).catch(() => {})
+        const nk = `${bId}-${chNo + 1}-${lang}-${isBilingual}-${bibleVersion}`
+        if (!chapterCache[nk]) bibleApi.getChapter(parseInt(bId), chNo + 1, lang, isBilingual, bibleVersion).then(r => { chapterCache[nk] = r.data }).catch(() => {})
       }
       return
     }
@@ -185,23 +234,17 @@ export default function ReadPage() {
     let lastErr: unknown
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
-        const res = await bibleApi.getChapter(parseInt(bId), parseInt(chId), lang, language === 'bilingual', bibleVersion, 12000)
+        const res = await bibleApi.getChapter(parseInt(bId), parseInt(chId), lang, isBilingual, bibleVersion, 12000)
         if (slowTimer.current) clearTimeout(slowTimer.current)
         chapterCache[cacheKey] = res.data
-        ;([ ['english', false], ['tamil', false], ['english', true] ] as Array<[string, boolean]>).forEach(([vLang, vBilingual]) => {
-          if (vLang === lang && vBilingual === (language === 'bilingual')) return
-          const vKey = `${bId}-${chId}-${vLang}-${vBilingual}-${bibleVersion}`
-          if (chapterCache[vKey]) return
-          bibleApi.getChapter(parseInt(bId), parseInt(chId), vLang, vBilingual, bibleVersion).then((r) => { chapterCache[vKey] = r.data }).catch(() => {})
-        })
         const chNo = parseInt(chId)
         if (res.data.has_prev) {
-          const pk = `${bId}-${chNo - 1}-${lang}-${language === 'bilingual'}-${bibleVersion}`
-          if (!chapterCache[pk]) bibleApi.getChapter(parseInt(bId), chNo - 1, lang, language === 'bilingual', bibleVersion).then(r => { chapterCache[pk] = r.data }).catch(() => {})
+          const pk = `${bId}-${chNo - 1}-${lang}-${isBilingual}-${bibleVersion}`
+          if (!chapterCache[pk]) bibleApi.getChapter(parseInt(bId), chNo - 1, lang, isBilingual, bibleVersion).then(r => { chapterCache[pk] = r.data }).catch(() => {})
         }
         if (res.data.has_next) {
-          const nk = `${bId}-${chNo + 1}-${lang}-${language === 'bilingual'}-${bibleVersion}`
-          if (!chapterCache[nk]) bibleApi.getChapter(parseInt(bId), chNo + 1, lang, language === 'bilingual', bibleVersion).then(r => { chapterCache[nk] = r.data }).catch(() => {})
+          const nk = `${bId}-${chNo + 1}-${lang}-${isBilingual}-${bibleVersion}`
+          if (!chapterCache[nk]) bibleApi.getChapter(parseInt(bId), chNo + 1, lang, isBilingual, bibleVersion).then(r => { chapterCache[nk] = r.data }).catch(() => {})
         }
         setChapter(res.data)
         setLastRead({ bookId: parseInt(bId), bookName: res.data.book_name_english, chapterNo: parseInt(chId) })
@@ -219,15 +262,16 @@ export default function ReadPage() {
     if (!loaded) { console.error('loadChapter failed:', lastErr); setLoadError(true) }
     setLoading(false)
     setLoadingSlow(false)
-  }, [lang, language, bibleVersion, setLastRead])
+  }, [lang, isBilingual, bibleVersion, setLastRead])
 
   useEffect(() => {
     if (bookId && chapterNo) loadChapter(bookId, chapterNo)
   }, [bookId, chapterNo, loadChapter])
 
-  // Load version catalog once
+  // Load version catalog and available languages once
   useEffect(() => {
     bibleApi.getVersions().then(r => setVersionCatalog(r.data.versions)).catch(() => {})
+    bibleApi.getLanguages().then(r => setAvailableLangs(r.data.languages)).catch(() => {})
   }, [])
 
   // Scroll to target verse
@@ -255,6 +299,7 @@ export default function ReadPage() {
 
   // ── Audio ──────────────────────────────────────────────────────────────────
   function stopAudio() {
+    audioStopped.current = true
     if (iosTimer.current) { clearInterval(iosTimer.current); iosTimer.current = null }
     if (isNative) { TextToSpeech.stop().catch(() => {}) } else { window.speechSynthesis?.cancel() }
     if (abortCtrl.current) { abortCtrl.current.abort(); abortCtrl.current = null }
@@ -275,7 +320,7 @@ export default function ReadPage() {
   }
 
   async function speakAtElevenLabs(verses: Verse[], idx: number) {
-    if (idx >= verses.length) { stopAudio(); return }
+    if (idx >= verses.length || audioStopped.current) { stopAudio(); return }
     const v = verses[idx]
     setAudioVerse(v.verse_no)
     setTimeout(() => verseRefs.current.get(v.verse_no)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 80)
@@ -301,7 +346,7 @@ export default function ReadPage() {
       const url  = URL.createObjectURL(blob)
       const el   = new Audio(url)
       audioElRef.current = el
-      el.onended = () => { URL.revokeObjectURL(url); speakAtElevenLabs(verses, idx + 1) }
+      el.onended = () => { URL.revokeObjectURL(url); if (!audioStopped.current) speakAtElevenLabs(verses, idx + 1) }
       el.onerror = () => { URL.revokeObjectURL(url); stopAudio() }
       el.play()
     } catch (err: unknown) {
@@ -310,7 +355,7 @@ export default function ReadPage() {
   }
 
   async function speakAtNative(verses: Verse[], idx: number) {
-    if (idx >= verses.length) { stopAudio(); return }
+    if (idx >= verses.length || audioStopped.current) { stopAudio(); return }
     const v = verses[idx]
     setAudioVerse(v.verse_no)
     setTimeout(() => verseRefs.current.get(v.verse_no)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 80)
@@ -324,14 +369,14 @@ export default function ReadPage() {
         volume: 1.0,
         category: 'ambient',
       })
-      speakAtNative(verses, idx + 1)
+      if (!audioStopped.current) speakAtNative(verses, idx + 1)
     } catch {
       stopAudio()
     }
   }
 
   function speakAt(verses: Verse[], idx: number) {
-    if (idx >= verses.length) { stopAudio(); return }
+    if (idx >= verses.length || audioStopped.current) { stopAudio(); return }
 
     if (elevenLabsKey && elevenLabsVoiceId) {
       speakAtElevenLabs(verses, idx)
@@ -351,7 +396,7 @@ export default function ReadPage() {
     const utter = new SpeechSynthesisUtterance(cleanForSpeech(v.text, isTamil))
     utter.lang  = isTamil ? 'ta-IN' : 'en-IN'
     utter.rate  = isTamil ? 0.82 : 0.88
-    utter.onend   = () => speakAt(verses, idx + 1)
+    utter.onend   = () => { if (!audioStopped.current) speakAt(verses, idx + 1) }
     utter.onerror = (e: SpeechSynthesisErrorEvent) => { if (e.error !== 'interrupted') stopAudio() }
     window.speechSynthesis?.speak(utter)
   }
@@ -360,6 +405,7 @@ export default function ReadPage() {
     if (audioPlaying) { stopAudio(); return }
     if (!chapter) return
     if (!elevenLabsKey && !isNative && !('speechSynthesis' in window)) { alert('Text-to-speech not supported in this browser.'); return }
+    audioStopped.current = false
     setAudioPlaying(true)
     if (!elevenLabsKey && !isNative) {
       // iOS watchdog: resume Web Speech if it pauses itself
@@ -451,10 +497,14 @@ export default function ReadPage() {
   // ── Styles ─────────────────────────────────────────────────────────────────
   const lineSpacingClass = { compact: 'leading-relaxed', normal: 'leading-loose', relaxed: 'leading-[2.2]' }[lineSpacing]
   const fontClass = { default: 'font-sans', serif: 'font-serif', 'tamil-traditional': 'font-tamil', dyslexic: 'font-dyslexic' }[fontFamily]
-  const currentVersion = versionCatalog.find(v => v.id === bibleVersion)
-  const langLabel = language === 'tamil' ? 'தமிழ்'
-    : language === 'bilingual' ? `BI·${currentVersion?.short ?? bibleVersion.toUpperCase()}`
-    : currentVersion?.short ?? bibleVersion.toUpperCase()
+  const currentVersion  = versionCatalog.find(v => v.id === bibleVersion)
+  const currentLangCfg  = availableLangs.find(l => l.key === language)
+  const langNativeName  = currentLangCfg?.native_name ?? (language === 'english' ? 'English' : language)
+  const langLabel       = language === 'english'
+    ? currentVersion?.short ?? bibleVersion.toUpperCase()
+    : isBilingual
+      ? `${langNativeName} · EN`
+      : langNativeName
 
   function goChapter(dir: 1 | -1) {
     if (!chapter || !bookId) return
@@ -477,8 +527,12 @@ export default function ReadPage() {
     }
     navigate(`/read/${bookId}/${chapterNo}?verse=${verseNo}`, { replace: true })
     const ref = `${chapter.book_name_english} ${chapterNo}:${verseNo}`
-    const refTamil = `${chapter.book_name_tamil} ${chapterNo}:${verseNo}`
-    const copyText = `${ref} (${refTamil})\n${chapter.verses.find(v => v.verse_no === verseNo)?.text || ''}`
+    const localName = chapter.book_name_local && chapter.book_name_local !== chapter.book_name_english
+      ? chapter.book_name_local
+      : chapter.book_name_tamil
+    const copyText = localName
+      ? `${ref} (${localName} ${chapterNo}:${verseNo})\n${chapter.verses.find(v => v.verse_no === verseNo)?.text || ''}`
+      : `${ref}\n${chapter.verses.find(v => v.verse_no === verseNo)?.text || ''}`
     try {
       navigator.clipboard?.writeText(copyText).catch(() => {})
     } catch {}
@@ -535,18 +589,24 @@ export default function ReadPage() {
         </button>
         <button onClick={() => navigate(`/book/${bookId}`)} className="flex-1 min-w-0 text-center min-h-0">
           <p className="font-semibold text-maroon-700 text-sm truncate">{chapter.book_name_english} {chapter.chapter_no}</p>
-          <p className="text-xs text-gray-500 font-tamil truncate">{chapter.book_name_tamil}</p>
+          {chapter.book_name_local && chapter.book_name_local !== chapter.book_name_english && (
+            <p className={`text-xs text-gray-500 truncate ${language === 'tamil' ? 'font-tamil' : ''}`}
+               dir={currentLangCfg?.direction ?? 'ltr'}>
+              {chapter.book_name_local}
+            </p>
+          )}
         </button>
         {/* Language badge — always visible, tap to open language sheet */}
         <button
           onClick={() => {
             setShowLangMenu(true)
-            // Prefetch all available versions for this chapter so switching is instant
-            if (bookId && chapterNo) {
+            setLangSearch('')
+            // Prefetch available English versions so switching is instant
+            if (bookId && chapterNo && language === 'english') {
               versionCatalog.filter(v => v.available && v.id !== bibleVersion).forEach(v => {
-                const vKey = `${bookId}-${chapterNo}-${lang}-${language === 'bilingual'}-${v.id}`
+                const vKey = `${bookId}-${chapterNo}-english-false-${v.id}`
                 if (!chapterCache[vKey]) {
-                  bibleApi.getChapter(parseInt(bookId), parseInt(chapterNo), lang, language === 'bilingual', v.id).then(r => { chapterCache[vKey] = r.data }).catch(() => {})
+                  bibleApi.getChapter(parseInt(bookId), parseInt(chapterNo), 'english', false, v.id).then(r => { chapterCache[vKey] = r.data }).catch(() => {})
                 }
               })
             }
@@ -569,32 +629,50 @@ export default function ReadPage() {
         </button>
       </div>
 
-      {/* ── Audio now-reading bar ────────────────────────────────────────── */}
       {/* ── Language row (sticky, below header) ───── */}
-      <div className={clsx(
-        'sticky top-[57px] z-20 flex border-b border-cream-300 bg-cream-100',
-      )}>
-        {(['english', 'tamil', 'bilingual'] as const).map((m) => (
+      <div className="sticky top-[57px] z-20 flex border-b border-cream-300 bg-cream-100">
+        {/* Primary language tab */}
+        <button
+          onClick={() => useAppStore.getState().setShowBilingual(false)}
+          onTouchStart={() => {
+            // Prefetch single-language chapter on touch
+            if (bookId && chapterNo && isBilingual) {
+              const key = `${bookId}-${chapterNo}-${language}-false-${bibleVersion}`
+              if (!chapterCache[key]) bibleApi.getChapter(parseInt(bookId), parseInt(chapterNo), language, false, bibleVersion).then(r => { chapterCache[key] = r.data }).catch(() => {})
+            }
+          }}
+          className={clsx(
+            'flex-1 py-2 text-xs font-medium transition-colors',
+            !isBilingual ? 'bg-maroon-700 text-white' : 'text-gray-600 hover:bg-cream-200'
+          )}
+        >
+          {langNativeName}
+        </button>
+
+        {/* Bilingual tab — only for non-English languages */}
+        {language !== 'english' && (
           <button
-            key={m}
-            onTouchStart={() => {
-              if (m === language) return
-              const vLang = m === 'bilingual' ? 'english' : m
-              const vBilingual = m === 'bilingual'
-              if (!bookId || !chapterNo) return
-              const vKey = `${bookId}-${chapterNo}-${vLang}-${vBilingual}-${bibleVersion}`
-              if (chapterCache[vKey]) return
-              bibleApi.getChapter(parseInt(bookId), parseInt(chapterNo), vLang, vBilingual, bibleVersion).then((r) => { chapterCache[vKey] = r.data }).catch(() => {})
+            onClick={() => {
+              useAppStore.getState().setShowBilingual(true)
+              if (bookId && chapterNo) {
+                const key = `${bookId}-${chapterNo}-${language}-true-${bibleVersion}`
+                if (!chapterCache[key]) bibleApi.getChapter(parseInt(bookId), parseInt(chapterNo), language, true, bibleVersion).then(r => { chapterCache[key] = r.data }).catch(() => {})
+              }
             }}
-            onClick={() => useAppStore.getState().setLanguage(m)}
+            onTouchStart={() => {
+              if (bookId && chapterNo) {
+                const key = `${bookId}-${chapterNo}-${language}-true-${bibleVersion}`
+                if (!chapterCache[key]) bibleApi.getChapter(parseInt(bookId), parseInt(chapterNo), language, true, bibleVersion).then(r => { chapterCache[key] = r.data }).catch(() => {})
+              }
+            }}
             className={clsx(
-              'flex-1 py-2 text-xs font-medium transition-colors',
-              language === m ? 'bg-maroon-700 text-white' : 'text-gray-600 hover:bg-cream-200'
+              'flex-1 py-2 text-xs font-medium transition-colors border-l border-cream-300',
+              isBilingual ? 'bg-maroon-700 text-white' : 'text-gray-600 hover:bg-cream-200'
             )}
           >
-            {m === 'bilingual' ? 'Bilingual' : m === 'tamil' ? 'தமிழ்' : 'English'}
+            Bilingual
           </button>
-        ))}
+        )}
       </div>
 
       {/* ── Chapter content — tap any English word to see dictionary */}
@@ -613,7 +691,7 @@ export default function ReadPage() {
           </button>
         </div>
 
-        {language === 'bilingual' ? (
+        {isBilingual ? (
           <div className="space-y-2">
             {chapter.verses.map((v) => {
               const tamilVerse = chapter.other_lang_verses?.find(tv => tv.verse_no === v.verse_no)
@@ -650,7 +728,7 @@ export default function ReadPage() {
                     </button>
                     <span className="text-[10px] text-gray-400 font-medium">
                       {copiedVerse === v.verse_no
-                        ? `${chapter.book_name_english} ${chapter.chapter_no}:${v.verse_no} · ${chapter.book_name_tamil}`
+                        ? `${chapter.book_name_english} ${chapter.chapter_no}:${v.verse_no}${chapter.book_name_local && chapter.book_name_local !== chapter.book_name_english ? ` · ${chapter.book_name_local}` : ''}`
                         : `Verse ${v.verse_no}`}
                     </span>
                     {hlColor && <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: hlColor }} />}
@@ -669,15 +747,16 @@ export default function ReadPage() {
                       More
                     </button>
                   </div>
-                  {/* Always two-column side by side — even on mobile */}
+                  {/* Two-column: English (other_lang) left, primary language right */}
                   <div className="grid grid-cols-2">
                     <p className={clsx('text-gray-800 px-3 py-2.5 border-r border-cream-200', lineSpacingClass)}
                        style={{ fontSize: Math.max(fontSize - 2, 13) }}>
-                      {renderWords(v.text)}
+                      {renderWords(tamilVerse?.text || '')}
                     </p>
-                    <p className={clsx('text-gray-700 font-tamil px-3 py-2.5', lineSpacingClass)}
-                       style={{ fontSize: Math.max(fontSize - 3, 12) }}>
-                      {tamilVerse?.text || ''}
+                    <p className={clsx('text-gray-700 px-3 py-2.5', lineSpacingClass, language === 'tamil' && 'font-tamil')}
+                       style={{ fontSize: Math.max(fontSize - 3, 12) }}
+                       dir={currentLangCfg?.direction ?? 'ltr'}>
+                      {v.text}
                     </p>
                   </div>
                 </div>
@@ -723,6 +802,7 @@ export default function ReadPage() {
                 <span
                   className={clsx('text-gray-800 flex-1 min-w-0', fontClass, lineSpacingClass, language === 'tamil' && 'font-tamil')}
                   style={{ fontSize }}
+                  dir={currentLangCfg?.direction ?? 'ltr'}
                 >
                   {language === 'english' ? renderWords(v.text) : v.text}
                 </span>
@@ -776,53 +856,72 @@ export default function ReadPage() {
       {showLangMenu && (
         <>
           <div className="fixed inset-0 z-40 bg-black/40" onClick={() => setShowLangMenu(false)} />
-          <div className="fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-2xl shadow-2xl max-h-[85vh] flex flex-col">
+          <div className="fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-2xl shadow-2xl max-h-[90vh] flex flex-col">
             <div className="px-5 pt-4 pb-3 border-b border-cream-200 shrink-0">
-              <p className="font-semibold text-center text-gray-800 text-base">Language &amp; Version</p>
+              <p className="font-semibold text-center text-gray-800 text-base mb-3">Choose Language</p>
+              {/* Search box */}
+              <input
+                type="text"
+                value={langSearch}
+                onChange={e => setLangSearch(e.target.value)}
+                placeholder="Search language…"
+                className="w-full px-3 py-2 text-sm border border-cream-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-maroon-400 bg-cream-50"
+                autoComplete="off"
+              />
             </div>
-            <div className="overflow-y-auto px-5 py-4 space-y-5">
-              {/* Language picker */}
-              <div>
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Language</p>
-                <div className="space-y-2">
-                  {([
-                    { key: 'english',   label: 'English',   sub: 'Read in English',              flag: '🇬🇧' },
-                    { key: 'tamil',     label: 'தமிழ்',      sub: 'Tamil Bible Society',          flag: '🇮🇳' },
-                    { key: 'bilingual', label: 'Bilingual', sub: 'English + Tamil side by side', flag: '📖' },
-                  ] as const).map(({ key, label, sub, flag }) => (
+            <div className="overflow-y-auto flex-1 px-4 py-3">
+              {/* Language list */}
+              <div className="space-y-1">
+                {availableLangs
+                  .filter(l =>
+                    !langSearch ||
+                    l.native_name.toLowerCase().includes(langSearch.toLowerCase()) ||
+                    l.key.toLowerCase().includes(langSearch.toLowerCase())
+                  )
+                  .map((l) => (
                     <button
-                      key={key}
-                      onClick={() => useAppStore.getState().setLanguage(key)}
+                      key={l.key}
+                      onClick={() => {
+                        useAppStore.getState().setLanguage(l.key)
+                        setShowLangMenu(false)
+                        // Prefetch the chapter in the new language
+                        if (bookId && chapterNo) {
+                          const nKey = `${bookId}-${chapterNo}-${l.key}-false-${bibleVersion}`
+                          if (!chapterCache[nKey]) bibleApi.getChapter(parseInt(bookId), parseInt(chapterNo), l.key, false, bibleVersion).then(r => { chapterCache[nKey] = r.data }).catch(() => {})
+                        }
+                      }}
                       className={clsx(
                         'w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition-colors text-left',
-                        language === key ? 'bg-maroon-700 text-white' : 'bg-cream-100 text-gray-800 hover:bg-cream-200'
+                        language === l.key ? 'bg-maroon-700 text-white' : 'bg-cream-50 text-gray-800 hover:bg-cream-200 border border-cream-200'
                       )}
                     >
-                      <span className="text-xl">{flag}</span>
-                      <div className="flex-1">
-                        <p className="font-semibold text-sm">{label}</p>
-                        <p className={clsx('text-xs', language === key ? 'text-maroon-200' : 'text-gray-500')}>{sub}</p>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-sm" dir={l.direction}>{l.native_name}</p>
+                        {l.key !== 'english' && l.key !== 'tamil' && (
+                          <p className={clsx('text-xs capitalize', language === l.key ? 'text-maroon-200' : 'text-gray-400')}>
+                            {l.key.replace(/_/g, ' ')}
+                          </p>
+                        )}
                       </div>
-                      {language === key && <span className="text-xs font-bold">✓</span>}
+                      {language === l.key && <span className="text-xs font-bold shrink-0">✓</span>}
                     </button>
                   ))}
-                </div>
               </div>
 
-              {/* English version picker — only relevant for English / Bilingual */}
-              {(language === 'english' || language === 'bilingual') && (
-                <div>
+              {/* English version picker */}
+              {(language === 'english' || isBilingual) && (
+                <div className="mt-5">
                   <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">English Translation</p>
-                  <div className="space-y-2">
+                  <div className="space-y-1">
                     {versionCatalog.map((v) => (
                       <button
                         key={v.id}
                         disabled={!v.available}
                         onTouchStart={() => {
                           if (!v.available || !bookId || !chapterNo) return
-                          const vKey = `${bookId}-${chapterNo}-${lang}-${language === 'bilingual'}-${v.id}`
+                          const vKey = `${bookId}-${chapterNo}-${language}-${isBilingual}-${v.id}`
                           if (!chapterCache[vKey]) {
-                            bibleApi.getChapter(parseInt(bookId), parseInt(chapterNo), lang, language === 'bilingual', v.id).then(r => { chapterCache[vKey] = r.data }).catch(() => {})
+                            bibleApi.getChapter(parseInt(bookId), parseInt(chapterNo), language, isBilingual, v.id).then(r => { chapterCache[vKey] = r.data }).catch(() => {})
                           }
                         }}
                         onClick={() => { if (v.available) { setBibleVersion(v.id); setShowLangMenu(false) } }}
@@ -830,7 +929,7 @@ export default function ReadPage() {
                           'w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition-colors text-left',
                           !v.available && 'opacity-40 cursor-not-allowed',
                           v.available && bibleVersion === v.id  ? 'bg-maroon-700 text-white' :
-                          v.available                            ? 'bg-cream-100 text-gray-800 hover:bg-cream-200' :
+                          v.available                            ? 'bg-cream-50 text-gray-800 hover:bg-cream-200 border border-cream-200' :
                                                                    'bg-gray-50 text-gray-500'
                         )}
                       >

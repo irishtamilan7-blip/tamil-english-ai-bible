@@ -1,12 +1,11 @@
 import { useNavigate } from 'react-router-dom'
 import { ChevronLeft } from 'lucide-react'
 import { clsx } from 'clsx'
-import { useAppStore, type Theme, type Language } from '../store/useAppStore'
+import { useAppStore, type Theme } from '../store/useAppStore'
 
 export default function SettingsPage() {
   const navigate = useNavigate()
   const {
-    language, setLanguage,
     theme, setTheme,
     fontSize, setFontSize,
     lineSpacing, setLineSpacing,
@@ -23,29 +22,6 @@ export default function SettingsPage() {
       </div>
 
       <div className="space-y-6">
-
-        {/* Language */}
-        <Section title="Language">
-          <div className="flex gap-2">
-            {(['english', 'tamil', 'bilingual'] as Language[]).map((l) => (
-              <button
-                key={l}
-                onClick={() => setLanguage(l)}
-                className={clsx(
-                  'flex-1 py-2.5 rounded-xl text-sm capitalize font-medium border-2 transition-colors',
-                  language === l
-                    ? 'bg-maroon-700 text-white border-maroon-700'
-                    : 'bg-white text-gray-600 border-cream-300 hover:border-maroon-300'
-                )}
-              >
-                {l === 'tamil' ? 'தமிழ்' : l === 'bilingual' ? 'Both' : 'English'}
-              </button>
-            ))}
-          </div>
-          <p className="text-xs text-gray-500 mt-2">
-            Bilingual shows English + Tamil side by side
-          </p>
-        </Section>
 
         {/* Theme */}
         <Section title="Theme">
@@ -111,10 +87,10 @@ export default function SettingsPage() {
         <Section title="Font Style">
           <div className="grid grid-cols-2 gap-2">
             {([
-              ['default',           'Default',        'Inter'],
-              ['serif',             'Serif (Bible)',   'EB Garamond'],
-              ['tamil-traditional', 'Tamil Style',     'Noto Sans Tamil'],
-              ['dyslexic',          'Dyslexic-Friendly','OpenDyslexic'],
+              ['default',           'Default',          'Inter'],
+              ['serif',             'Serif (Bible)',     'EB Garamond'],
+              ['tamil-traditional', 'Tamil Style',       'Noto Sans Tamil'],
+              ['dyslexic',          'Dyslexic-Friendly', 'OpenDyslexic'],
             ] as const).map(([val, label, font]) => (
               <button
                 key={val}

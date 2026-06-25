@@ -26,13 +26,14 @@ export default function SearchPage() {
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(false)
 
-  const { language, bibleVersion, searchHistory, addSearchHistory, removeSearchHistory, clearSearchHistory } = useAppStore()
-  const lang = language === 'bilingual' ? 'english' : language
+  const { language, showBilingual, bibleVersion, searchHistory, addSearchHistory, removeSearchHistory, clearSearchHistory } = useAppStore()
+  const lang = language
+  const isBilingual = showBilingual && language !== 'english'
 
   function prefetchChapter(bookId: number, chapterNo: number) {
-    const key = `${bookId}-${chapterNo}-${lang}-${language === 'bilingual'}-${bibleVersion}`
+    const key = `${bookId}-${chapterNo}-${lang}-${isBilingual}-${bibleVersion}`
     if (chapterCache[key]) return
-    bibleApi.getChapter(bookId, chapterNo, lang, language === 'bilingual', bibleVersion)
+    bibleApi.getChapter(bookId, chapterNo, lang, isBilingual, bibleVersion)
       .then((res) => { chapterCache[key] = res.data })
       .catch(() => {})
   }
@@ -165,22 +166,12 @@ export default function SearchPage() {
         </div>
       )}
 
-      {/* Empty state hint */}
+      {/* Empty state — clean for new users, no hardcoded suggestions */}
       {!loading && !results.length && !searchHistory.length && !searchParams.get('q') && (
-        <div className="text-center py-12 text-gray-400 space-y-2">
+        <div className="text-center py-16 text-gray-400 space-y-2">
           <Search className="h-10 w-10 mx-auto opacity-40" />
-          <p className="text-sm">Try searching for:</p>
-          <div className="flex flex-wrap justify-center gap-2 mt-2">
-            {['John 3:16', 'love', 'Moses', 'faith', 'Psalms 23'].map((s) => (
-              <button
-                key={s}
-                onClick={() => { setQuery(s); doSearch(s) }}
-                className="px-3 py-1.5 bg-cream-100 border border-cream-300 rounded-full text-sm text-gray-600 hover:border-maroon-300"
-              >
-                {s}
-              </button>
-            ))}
-          </div>
+          <p className="text-sm font-medium">Search the Bible</p>
+          <p className="text-xs text-gray-400">Type a verse like "John 3:16", a word like "love", or a name like "Moses"</p>
         </div>
       )}
 

@@ -51,6 +51,9 @@ export const bibleApi = {
 
   getVersions: () =>
     apiFetch('/bible/versions', {}),
+
+  getLanguages: () =>
+    apiFetch('/bible/languages', {}),
 }
 
 export const aiApi = {

@@ -5,6 +5,7 @@ import { clsx } from 'clsx'
 import { aiApi, bibleApi } from '../utils/api'
 import { useAppStore } from '../store/useAppStore'
 import chapterCache from '../utils/chapterCache'
+import { SpeechRecognition as NativeSpeech } from '@capacitor-community/speech-recognition'
 
 // ── Book lookup (key = lowercase, no spaces/symbols) ────────────────────────
 const BOOK_MAP: Record<string, number> = {
@@ -94,6 +95,8 @@ const BOOK_MAP: Record<string, number> = {
   luke:42,luk:42,lk:42,
   // John (NT) — note: same as jonah prefix so we handle carefully
   john:43,joh:43,jn:43,
+  // Indian-English phonetics for John (en-IN speech recognition)
+  jaan:43,jahn:43,joan:43,jonn:43,yohn:43,yoan:43,jone:43,
   // Acts
   acts:44,act:44,
   // Romans
@@ -462,27 +465,38 @@ export default function VoiceFab() {
   const [showPanel, setShowPanel]   = useState(false)
   const [manualText, setManualText] = useState('')
   const [prefetching, setPrefetching] = useState(false)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const recRef = useRef<any>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const navigate = useNavigate()
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const SpeechAPI: any =
-    typeof window !== 'undefined'
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ? (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
-      : null
+  // Draggable FAB state
+  const [fabPos, setFabPos] = useState({ right: 16, bottom: 96 })
+  const dragging = useRef(false)
+  const hasMoved = useRef(false)
+  const dragStart = useRef({ px: 0, py: 0, right: 16, bottom: 96 })
 
-  useEffect(() => () => { recRef.current?.abort(); clearTimer() }, [])
+  // Guard: prevents callbacks from navigating after panel is closed
+  const panelOpen = useRef(false)
+  // Guard: prevents concurrent tryAIParse calls
+  const aiParsing = useRef(false)
+  // Guard: native listener cleanup
+  const nativeListenerRef = useRef<{ remove: () => void } | null>(null)
+
+  useEffect(() => () => {
+    NativeSpeech.stop().catch(() => {})
+    nativeListenerRef.current?.remove()
+    clearTimer()
+  }, [])
 
   function clearTimer() {
     if (timerRef.current) clearTimeout(timerRef.current)
   }
 
   function closePanel() {
-    recRef.current?.abort()
+    panelOpen.current = false
+    NativeSpeech.stop().catch(() => {})
+    nativeListenerRef.current?.remove()
+    nativeListenerRef.current = null
     setListening(false)
     setAiThinking(false)
     setShowPanel(false)
@@ -494,91 +508,150 @@ export default function VoiceFab() {
   }
 
   function openPanel() {
+    panelOpen.current = true
     setShowPanel(true)
     setError(null)
     setHeard('')
     setMatched(null)
     setManualText('')
-    // Start listening immediately
-    if (SpeechAPI) setTimeout(startListening, 100)
-    else setTimeout(() => inputRef.current?.focus(), 200)
+    // Focus text input — do NOT auto-start mic so user can choose when to speak
+    setTimeout(() => inputRef.current?.focus(), 200)
   }
 
   async function startListening() {
-    if (!SpeechAPI) {
-      setError('Voice not supported in this browser. Please type below.')
-      inputRef.current?.focus()
-      return
-    }
     clearTimer()
     setError(null)
     setHeard('')
     setMatched(null)
+    setManualText('')
 
-    // Explicitly request mic permission first — this triggers the iOS/browser permission dialog
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      // Stop the stream immediately — we only needed the permission grant
-      stream.getTracks().forEach(t => t.stop())
-    } catch {
-      setError('Microphone access denied.\n\niPhone: Go to Settings → Tamil English AI Bible → Microphone and enable it.\nBrowser: Click the lock icon in the address bar and allow microphone.')
+    // Stop any previous session
+    await NativeSpeech.stop().catch(() => {})
+    nativeListenerRef.current?.remove()
+    nativeListenerRef.current = null
+
+    // Check availability
+    const avail = await NativeSpeech.available().catch(() => ({ available: false }))
+    if (!avail.available) {
+      setError('Speech recognition is not available on this device. Please type below.')
+      setTimeout(() => inputRef.current?.focus(), 100)
+      return
+    }
+
+    // Request permission
+    let perm = await NativeSpeech.checkPermissions().catch(() => null)
+    if (perm?.speechRecognition !== 'granted') {
+      perm = await NativeSpeech.requestPermissions().catch(() => null)
+    }
+    if (perm?.speechRecognition !== 'granted') {
+      setError('Microphone blocked.\n\niPhone: Settings → Tamil English AI Bible → Microphone & Speech Recognition → Enable')
       setTimeout(() => inputRef.current?.focus(), 100)
       return
     }
 
     setListening(true)
 
-    const rec = new SpeechAPI()
-    // en-IN = Indian English — much better for non-native / South Asian speakers
-    rec.lang = 'en-IN'
-    rec.interimResults = true
-    rec.maxAlternatives = 10   // try all 10 alternatives
-    rec.continuous = false
+    const lastHeard = { text: '' }
+    let processed = false
+    const startedAt = Date.now()
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    rec.onresult = (event: any) => {
-      const result = event.results[event.results.length - 1]
-      // Collect all alternatives
-      const alts = Array.from({ length: result.length }, (_, i) => result[i].transcript)
-      setHeard(alts[0])
-
-      if (result.isFinal) {
-        setListening(false)
-        const { ref, heard: h } = tryAllAlternatives(alts)
-        setHeard(h)
-        if (ref) {
-          setMatched(ref)
-          goNavigate(ref)
-        } else {
-          // Regex failed — try AI fallback
-          tryAIParse(h)
-        }
-      }
+    function clearDebounce() {
+      if (debounceTimer) { clearTimeout(debounceTimer); debounceTimer = null }
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    rec.onerror = (e: any) => {
+    function processResult() {
+      if (processed || !panelOpen.current) return
+      clearDebounce()
+      processed = true
+      clearTimer()
       setListening(false)
-      if (e.error === 'not-allowed') {
-        setError('Microphone blocked. Please allow mic access in browser settings.')
-      } else if (e.error === 'no-speech') {
-        setError('Nothing heard. Tap the mic and speak clearly.')
-      } else {
-        setError('Could not hear clearly. Please type the reference below.')
+      const text = lastHeard.text.trim()
+      if (!text) {
+        const elapsed = Date.now() - startedAt
+        if (elapsed < 2000) {
+          setError('Speech recognition failed to initialize.\n\nThis feature requires a real iPhone — it does not work in the iOS Simulator.')
+        } else {
+          setError('Nothing heard. Speak clearly after tapping the mic.')
+        }
+        setTimeout(() => inputRef.current?.focus(), 100)
+        return
       }
-      setTimeout(() => inputRef.current?.focus(), 100)
+      const { ref, heard: h } = tryAllAlternatives([text])
+      setHeard(h)
+      if (ref) {
+        setMatched(ref)
+        goNavigate(ref)
+      } else {
+        // Skip AI parse (2-5s latency) — go directly to instant text search
+        goSearch(text)
+      }
     }
 
-    rec.onend = () => setListening(false)
-    recRef.current = rec
-    rec.start()
+    // Show live transcription as the user speaks
+    // Debounce: if no new partial result for 800ms, user has stopped — process immediately
+    // instead of waiting for iOS silence detection (~1.5-3s delay)
+    const partialListener = await NativeSpeech.addListener('partialResults', (data: { matches: string[] }) => {
+      if (!panelOpen.current) return
+      const t = data.matches?.[0] ?? ''
+      if (t) {
+        lastHeard.text = t
+        setHeard(t)
+        clearDebounce()
+        debounceTimer = setTimeout(() => {
+          if (!processed && panelOpen.current) {
+            NativeSpeech.stop().catch(() => {})
+            // Give listeningState 300ms to fire normally; force if it doesn't
+            setTimeout(() => { if (!processed) processResult() }, 300)
+          }
+        }, 1200)
+      }
+    })
+
+    // Triggered when recognition ends (user stopped speaking / auto-stop)
+    const stateListener = await NativeSpeech.addListener('listeningState', (data: { status: string }) => {
+      if (data.status === 'stopped') {
+        clearDebounce()
+        partialListener.remove()
+        stateListener.remove()
+        nativeListenerRef.current = null
+        processResult()
+      }
+    })
+
+    nativeListenerRef.current = { remove: () => { clearDebounce(); partialListener.remove(); stateListener.remove() } }
+
+    try {
+      await NativeSpeech.start({ language: 'en-IN', maxResults: 5, partialResults: true, popup: false })
+    } catch {
+      if (!processed) {
+        partialListener.remove()
+        stateListener.remove()
+        nativeListenerRef.current = null
+        setListening(false)
+        setError('Could not start microphone. Please check permissions in Settings.')
+        setTimeout(() => inputRef.current?.focus(), 100)
+      }
+      return
+    }
+
+    // Auto-stop after 15s of no speech
+    timerRef.current = setTimeout(async () => {
+      if (!processed && panelOpen.current) {
+        await NativeSpeech.stop().catch(() => {})
+        setTimeout(() => { if (!processed) { processResult() } }, 500)
+      }
+    }, 15000)
   }
 
   async function tryAIParse(text: string) {
+    if (!panelOpen.current || aiParsing.current) return
+    aiParsing.current = true
     setAiThinking(true)
     setError(null)
     try {
       const res = await aiApi.voiceParse(text)
+      if (!panelOpen.current) return  // panel closed while awaiting AI response
       const data = res.data
       if (data.type === 'reference' && data.bookId && data.chapterNo) {
         const ref: ParsedRef = {
@@ -597,33 +670,38 @@ export default function VoiceFab() {
         setTimeout(() => inputRef.current?.focus(), 100)
       }
     } catch {
+      if (!panelOpen.current) return
       setManualText(text)
       setError(`Heard: "${text}" — edit below or try again.`)
       setTimeout(() => inputRef.current?.focus(), 100)
     } finally {
       setAiThinking(false)
+      aiParsing.current = false
     }
   }
 
   async function goNavigate(ref: ParsedRef) {
+    if (!panelOpen.current) return  // guard against stale callbacks
     clearTimer()
-    const { language, bibleVersion } = useAppStore.getState()
-    const lang = language === 'bilingual' ? 'english' : language
-    const key = `${ref.bookId}-${ref.chapter}-${lang}-${language === 'bilingual'}-${bibleVersion}`
+    const { language, showBilingual, bibleVersion } = useAppStore.getState()
+    const lang = language
+    const isBilingual = showBilingual && language !== 'english'
+    const key = `${ref.bookId}-${ref.chapter}-${lang}-${isBilingual}-${bibleVersion}`
     if (!chapterCache[key]) {
       setPrefetching(true)
-      const fetchP = bibleApi.getChapter(ref.bookId, ref.chapter, lang, language === 'bilingual', bibleVersion)
+      const fetchP = bibleApi.getChapter(ref.bookId, ref.chapter, lang, isBilingual, bibleVersion)
         .then((res) => { chapterCache[key] = res.data })
         .catch(() => {})
       await Promise.race([fetchP, new Promise(r => setTimeout(r, 8000))])
       setPrefetching(false)
     }
+    if (!panelOpen.current) return  // closed while prefetching
     closePanel()
     navigate(`/read/${ref.bookId}/${ref.chapter}${ref.verse ? `?verse=${ref.verse}` : ''}`)
   }
 
   function goSearch(q: string) {
-    if (!q.trim()) return
+    if (!q.trim() || !panelOpen.current) return
     closePanel()
     navigate(`/search?q=${encodeURIComponent(q.trim())}`)
   }
@@ -661,7 +739,7 @@ export default function VoiceFab() {
             {/* Mic button */}
             <div className="flex justify-center mb-3">
               <button
-                onClick={listening ? () => recRef.current?.stop() : startListening}
+                onClick={listening ? () => NativeSpeech.stop().catch(() => {}) : startListening}
                 className={clsx(
                   'w-16 h-16 rounded-full flex items-center justify-center transition-all shadow-lg',
                   listening
@@ -756,8 +834,13 @@ export default function VoiceFab() {
                 placeholder="John 3:16 · Yovaan 3 16 · Maarkku anju pathinanchu"
                 className="flex-1 border-2 border-cream-300 focus:border-maroon-700 rounded-xl px-3 py-2.5 text-sm outline-none transition-colors"
                 onKeyDown={(e) => { if (e.key === 'Enter') handleManual(manualText) }}
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
               />
               <button
+                type="button"
                 onClick={() => handleManual(manualText)}
                 className="px-3 py-2.5 bg-maroon-700 text-white rounded-xl hover:bg-maroon-800 min-h-0 min-w-0"
               >
@@ -771,14 +854,39 @@ export default function VoiceFab() {
         </div>
       )}
 
-      {/* FAB */}
+      {/* FAB — draggable like assistive touch */}
       <button
-        onClick={showPanel ? closePanel : openPanel}
         className={clsx(
-          'fixed bottom-24 right-4 z-40 w-14 h-14 rounded-full flex items-center justify-center shadow-xl transition-all active:scale-95',
+          'fixed z-40 w-14 h-14 rounded-full flex items-center justify-center shadow-xl transition-colors active:scale-95 touch-none select-none',
           listening ? 'bg-red-500 mic-recording' : 'bg-maroon-700 hover:bg-maroon-800'
         )}
+        style={{ right: fabPos.right, bottom: fabPos.bottom, cursor: dragging.current ? 'grabbing' : 'grab' }}
         title="Tap to speak or type a Bible reference"
+        onPointerDown={(e) => {
+          dragging.current = true
+          hasMoved.current = false
+          dragStart.current = { px: e.clientX, py: e.clientY, right: fabPos.right, bottom: fabPos.bottom }
+          e.currentTarget.setPointerCapture(e.pointerId)
+        }}
+        onPointerMove={(e) => {
+          if (!dragging.current) return
+          const dx = e.clientX - dragStart.current.px
+          const dy = e.clientY - dragStart.current.py
+          if (Math.abs(dx) > 5 || Math.abs(dy) > 5) hasMoved.current = true
+          const W = window.innerWidth
+          const H = window.innerHeight
+          const SIZE = 56
+          const newRight = Math.max(8, Math.min(W - SIZE - 8, dragStart.current.right - dx))
+          const newBottom = Math.max(80, Math.min(H - SIZE - 40, dragStart.current.bottom - dy))
+          setFabPos({ right: newRight, bottom: newBottom })
+        }}
+        onPointerUp={() => {
+          const moved = hasMoved.current
+          dragging.current = false
+          hasMoved.current = false
+          if (!moved) showPanel ? closePanel() : openPanel()
+        }}
+        onPointerCancel={() => { dragging.current = false; hasMoved.current = false }}
       >
         <Mic className="h-6 w-6 text-white" />
       </button>

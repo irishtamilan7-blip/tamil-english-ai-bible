@@ -56,7 +56,8 @@ export default function VerseActionBar({ bookId, bookName, bookNameTamil, chapte
   const [copied, setCopied]               = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const scrollRef   = useRef<HTMLDivElement>(null)
-  const { language } = useAppStore()
+  const { language, showBilingual } = useAppStore()
+  const isBilingual = showBilingual && language !== 'english'
 
   // Lock background page scroll while action bar is open
   useEffect(() => {

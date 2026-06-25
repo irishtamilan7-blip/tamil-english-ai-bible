@@ -11,29 +11,31 @@ export default function BookPage() {
   const { bookId } = useParams()
   const navigate = useNavigate()
   const setSheetOpen = useAppStore((s) => s.setSheetOpen)
-  const { language, bibleVersion } = useAppStore()
-  const lang = language === 'bilingual' ? 'english' : language
+  const { language, showBilingual, bibleVersion } = useAppStore()
+  const lang = language
+  const isBilingual = showBilingual && language !== 'english'
   const _initBook = bookId ? (bookCache[parseInt(bookId)] ?? null) : null
   const [book, setBook] = useState(_initBook)
   const [selectedChapter, setSelectedChapter] = useState<number | null>(null)
   const [verseCount, setVerseCount] = useState<number>(30)
 
   useEffect(() => {
-    if (!bookId || bookCache[parseInt(bookId)]) return
-    bibleApi.getBook(parseInt(bookId))
+    if (!bookId) return
+    // Re-fetch when language changes so name_local is updated
+    bibleApi.getBook(parseInt(bookId), language)
       .then((res) => { bookCache[parseInt(bookId)] = res.data; setBook(res.data) })
       .catch(() => {})
-  }, [bookId])
+  }, [bookId, language])
 
   useEffect(() => {
     if (!selectedChapter || !bookId) return
-    const cacheKey = `${bookId}-${selectedChapter}-${lang}-${language === 'bilingual'}-${bibleVersion}`
+    const cacheKey = `${bookId}-${selectedChapter}-${lang}-${isBilingual}-${bibleVersion}`
     if (chapterCache[cacheKey]) {
       setVerseCount(chapterCache[cacheKey].verses?.length ?? 30)
       return
     }
     // Prefetch full chapter with user's language/version — ReadPage will load instantly from cache
-    bibleApi.getChapter(parseInt(bookId), selectedChapter, lang, language === 'bilingual', bibleVersion)
+    bibleApi.getChapter(parseInt(bookId), selectedChapter, lang, isBilingual, bibleVersion)
       .then((res) => {
         chapterCache[cacheKey] = res.data
         setVerseCount(res.data.verses?.length ?? res.data.total_verses ?? 30)
@@ -87,8 +89,10 @@ export default function BookPage() {
         </button>
         <div>
           <h1 className="text-xl font-bold text-maroon-700 font-serif">{book.name_english}</h1>
-          <p className="text-sm text-gray-500 font-tamil">
-            {book.name_tamil} · {book.chapter_count} chapters
+          <p className={`text-sm text-gray-500 ${language === 'tamil' ? 'font-tamil' : ''}`}>
+            {book.name_local && book.name_local !== book.name_english
+              ? `${book.name_local} · ${book.chapter_count} chapters`
+              : `${book.chapter_count} chapters`}
           </p>
         </div>
       </div>
@@ -101,9 +105,9 @@ export default function BookPage() {
           <button
             key={ch}
             onTouchStart={() => {
-              const cacheKey = `${bookId}-${ch}-${lang}-${language === 'bilingual'}-${bibleVersion}`
+              const cacheKey = `${bookId}-${ch}-${lang}-${isBilingual}-${bibleVersion}`
               if (!chapterCache[cacheKey]) {
-                bibleApi.getChapter(parseInt(bookId!), ch, lang, language === 'bilingual', bibleVersion)
+                bibleApi.getChapter(parseInt(bookId!), ch, lang, isBilingual, bibleVersion)
                   .then((res) => { chapterCache[cacheKey] = res.data })
                   .catch(() => {})
               }

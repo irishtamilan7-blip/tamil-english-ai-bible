@@ -1,9 +1,16 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
-export type Language = 'english' | 'tamil' | 'bilingual'
+export type Language = string  // 'english', 'tamil', 'malayalam', 'korean', etc.
 export type Theme = 'light' | 'dark' | 'sepia'
 export type FontSize = number // 12–32
+
+export interface LanguageConfig {
+  key: string
+  native_name: string
+  direction: 'ltr' | 'rtl'
+  file: string
+}
 
 interface LastRead {
   bookId: number
@@ -14,11 +21,12 @@ interface LastRead {
 
 interface AppState {
   language: Language
+  showBilingual: boolean  // show primary language + English side by side (hidden for English)
   theme: Theme
   fontSize: FontSize
   lineSpacing: 'compact' | 'normal' | 'relaxed'
   fontFamily: 'default' | 'serif' | 'tamil-traditional' | 'dyslexic'
-  bibleVersion: string   // e.g. 'bbe', 'kjv'
+  bibleVersion: string
   lastRead: LastRead | null
   searchHistory: string[]
   offlineMode: boolean
@@ -27,6 +35,7 @@ interface AppState {
   sheetOpen: boolean
 
   setLanguage: (l: Language) => void
+  setShowBilingual: (v: boolean) => void
   setTheme: (t: Theme) => void
   setFontSize: (s: FontSize) => void
   setLineSpacing: (s: AppState['lineSpacing']) => void
@@ -44,8 +53,9 @@ interface AppState {
 
 export const useAppStore = create<AppState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       language: 'english',
+      showBilingual: false,
       theme: 'light',
       fontSize: 18,
       lineSpacing: 'normal',
@@ -58,7 +68,12 @@ export const useAppStore = create<AppState>()(
       elevenLabsVoiceId: '',
       sheetOpen: false,
 
-      setLanguage: (language) => set({ language }),
+      setLanguage: (language) => {
+        // English readers don't need bilingual (English is already the reference language)
+        const showBilingual = language === 'english' ? false : get().showBilingual
+        set({ language, showBilingual })
+      },
+      setShowBilingual: (showBilingual) => set({ showBilingual }),
       setBibleVersion: (bibleVersion) => set({ bibleVersion }),
       setTheme: (theme) => {
         document.body.className = theme === 'light' ? '' : `theme-${theme}`
@@ -80,6 +95,15 @@ export const useAppStore = create<AppState>()(
       setElevenLabsVoiceId: (elevenLabsVoiceId) => set({ elevenLabsVoiceId }),
       setSheetOpen: (sheetOpen) => set({ sheetOpen }),
     }),
-    { name: 'biblevoice-app-store' }
+    {
+      name: 'biblevoice-app-store',
+      // Migrate old 'bilingual' language value → tamil + showBilingual:true
+      onRehydrateStorage: () => (state) => {
+        if (state && state.language === 'bilingual') {
+          state.language = 'tamil'
+          state.showBilingual = true
+        }
+      },
+    }
   )
 )
