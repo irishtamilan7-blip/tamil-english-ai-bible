@@ -274,5 +274,29 @@
     "native_name": "دری",
     "direction": "rtl",
     "file": "dari_bible.json"
+  },
+  {
+    "key": "hindi",
+    "native_name": "हिन्दी",
+    "direction": "ltr",
+    "file": "hindi_bible.json"
+  },
+  {
+    "key": "telugu",
+    "native_name": "తెలుగు",
+    "direction": "ltr",
+    "file": "telugu_bible.json"
+  },
+  {
+    "key": "kannada",
+    "native_name": "ಕನ್ನಡ",
+    "direction": "ltr",
+    "file": "kannada_bible.json"
+  },
+  {
+    "key": "marathi",
+    "native_name": "मराठी",
+    "direction": "ltr",
+    "file": "marathi_bible.json"
   }
 ]
