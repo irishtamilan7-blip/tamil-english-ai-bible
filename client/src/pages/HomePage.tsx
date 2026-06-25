@@ -55,6 +55,22 @@ function saveVerse(today: string, lang: string, verse: DailyVerse) {
   try { localStorage.setItem(`${STORAGE_PREFIX}_${lang}`, JSON.stringify({ date: today, verse })) } catch {}
 }
 
+// Clear any stale cached verses that have empty textLocal (stored before server had multi-language support)
+function clearStaleCaches() {
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i)
+      if (!key?.startsWith(STORAGE_PREFIX + '_')) continue
+      const lang = key.slice(STORAGE_PREFIX.length + 1)
+      if (lang === 'english') continue
+      const raw = localStorage.getItem(key)
+      if (!raw) continue
+      const parsed = JSON.parse(raw)
+      if (!parsed.verse?.textLocal) localStorage.removeItem(key)
+    }
+  } catch {}
+}
+
 function prefetchTestaments(lang = 'english') {
   const oldKey = `${lang}:old`
   const newKey = `${lang}:new`
@@ -76,6 +92,9 @@ export default function HomePage() {
   const [showLangSheet, setShowLangSheet] = useState(false)
   const [langSearch, setLangSearch]       = useState('')
   const [availableLangs, setAvailableLangs] = useState<LanguageConfig[]>(FALLBACK_LANGS)
+
+  // Clear any stale cached verses with empty textLocal (one-time cleanup on mount)
+  useEffect(() => { clearStaleCaches() }, [])
 
   // Prefetch book lists on mount so Old/New Testament pages open instantly
   useEffect(() => { prefetchTestaments(language) }, [language])

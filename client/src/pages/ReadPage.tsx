@@ -384,6 +384,21 @@ export default function ReadPage() {
       })
       if (!audioStopped.current) speakAtNative(verses, idx + 1)
     } catch {
+      // Voice for this language not installed — fall back to English TTS
+      if (ttsLang !== 'en-IN') {
+        try {
+          await TextToSpeech.speak({
+            text: cleanForSpeech(v.text),
+            lang: 'en-IN',
+            rate: 0.88,
+            pitch: 1.0,
+            volume: 1.0,
+            category: 'ambient',
+          })
+          if (!audioStopped.current) speakAtNative(verses, idx + 1)
+          return
+        } catch { /* ignore */ }
+      }
       stopAudio()
     }
   }
