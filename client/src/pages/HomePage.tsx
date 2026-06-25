@@ -60,8 +60,8 @@ function loadValidVerse(today: string, lang: string): DailyVerse | null {
   const v = loadStoredVerse(today, lang)
   if (!v) return null
   if (lang === 'english') return v
-  // For non-English: reject cache if textLocal is missing (stale from before multilingual server)
-  if (!v.textLocal) {
+  // Reject cache if textLocal is missing OR equals English text (stale: server was returning English for this lang)
+  if (!v.textLocal || v.textLocal === v.textEnglish) {
     try { localStorage.removeItem(`${STORAGE_PREFIX}_${lang}`) } catch {}
     return null
   }

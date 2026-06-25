@@ -97,13 +97,19 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: 'biblevoice-app-store',
-      // Migrate old 'bilingual' language value → tamil + showBilingual:true
-      onRehydrateStorage: () => (state) => {
-        if (state && state.language === 'bilingual') {
-          state.language = 'tamil'
-          state.showBilingual = true
-        }
-      },
+      // language/showBilingual/sheetOpen are session-only: app always opens in English
+      partialize: (state): Partial<AppState> => ({
+        theme:            state.theme,
+        fontSize:         state.fontSize,
+        lineSpacing:      state.lineSpacing,
+        fontFamily:       state.fontFamily,
+        bibleVersion:     state.bibleVersion,
+        lastRead:         state.lastRead,
+        searchHistory:    state.searchHistory,
+        offlineMode:      state.offlineMode,
+        elevenLabsKey:    state.elevenLabsKey,
+        elevenLabsVoiceId: state.elevenLabsVoiceId,
+      }),
     }
   )
 )
