@@ -116,29 +116,31 @@ export default function HomePage() {
     const pick = DAILY_VERSES[dayOfYear % DAILY_VERSES.length]
 
     const HEBREW_HEADINGS = /^[-\s]*(ALEPH|BETH|GIMEL|DALETH|HE|VAU|VAV|ZAIN|ZAYIN|CHETH|HETH|TETH|JOD|YOD|CAPH|KAPH|LAMED|MEM|NUN|SAMECH|SAMEKH|AIN|AYIN|PE|TZADDI|TSADE|KOPH|QOPH|RESH|SHIN|SCHIN|TAU|TAV)[-\s.]*/i
-    const findText = (verses: { verse_no: number; text: string }[]) =>
-      (verses.find(v => v.verse_no === pick.verse)?.text || '').replace(HEBREW_HEADINGS, '').trim()
 
-    // Always fetch English; also fetch selected language when non-English
-    const fetches: Promise<{ data: { verses: { verse_no: number; text: string }[] } }>[] = [
+    // Fetch English + selected language in parallel; use allSettled so English always shows
+    const promises = [
       bibleApi.getChapter(pick.bookId, pick.chapter, 'english'),
-    ]
-    if (language !== 'english') {
-      fetches.push(bibleApi.getChapter(pick.bookId, pick.chapter, language))
-    }
+      language !== 'english' ? bibleApi.getChapter(pick.bookId, pick.chapter, language) : Promise.resolve(null),
+    ] as const
 
-    Promise.all(fetches).then(([engRes, localRes]) => {
+    Promise.allSettled(promises).then(([engResult, localResult]) => {
+      if (engResult.status === 'rejected') return  // can't show anything without English
+      const findText = (verses: { verse_no: number; text: string }[]) =>
+        (verses.find(v => v.verse_no === pick.verse)?.text || '').replace(HEBREW_HEADINGS, '').trim()
+      const engVerses = engResult.value.data.verses
+      const localVerses = localResult.status === 'fulfilled' && localResult.value
+        ? localResult.value.data.verses : null
       const verse: DailyVerse = {
         ref: pick.ref,
-        textEnglish: findText(engRes.data.verses),
-        textLocal:   localRes ? findText(localRes.data.verses) : '',
+        textEnglish: findText(engVerses),
+        textLocal:   localVerses ? findText(localVerses) : '',
         bookId: pick.bookId,
         chapter: pick.chapter,
         verse: pick.verse,
       }
       saveVerse(today, language, verse)
       setDailyVerse(verse)
-    }).catch(() => {})
+    })
   }, [today, language])
 
   const currentLang = availableLangs.find(l => l.key === language)
