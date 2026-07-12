@@ -4,6 +4,7 @@ import { ChevronLeft, Send, Sparkles, Trash2 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { aiApi } from '../utils/api'
 import { parseVerseRef } from '../utils/bibleRef'
+import { useAppStore } from '../store/useAppStore'
 
 interface Message {
   role: 'user' | 'assistant'
@@ -19,8 +20,20 @@ const STARTERS = [
   'What happened in the story of Joseph?',
 ]
 
+const LANG_DISPLAY: Record<string, string> = {
+  english: 'English', tamil: 'Tamil', malayalam: 'Malayalam',
+  hindi: 'Hindi', telugu: 'Telugu', kannada: 'Kannada', marathi: 'Marathi',
+  korean: 'Korean', japanese: 'Japanese',
+  chinese_simplified: 'Chinese (Simplified)', chinese_traditional: 'Chinese (Traditional)',
+  arabic: 'Arabic', hebrew: 'Hebrew', greek: 'Greek',
+  spanish: 'Spanish', french: 'French', german: 'German', portuguese: 'Portuguese',
+  russian: 'Russian', italian: 'Italian', dutch: 'Dutch', swedish: 'Swedish',
+  turkish: 'Turkish', vietnamese: 'Vietnamese', thai: 'Thai', indonesian: 'Indonesian',
+}
+
 export default function AskAIPage() {
   const navigate  = useNavigate()
+  const { language } = useAppStore()
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput]       = useState('')
   const [loading, setLoading]   = useState(false)
@@ -54,7 +67,7 @@ export default function AskAIPage() {
     setLoading(true)
 
     try {
-      const res = await aiApi.chat(msg, messages)
+      const res = await aiApi.chat(msg, messages, language)
       setMessages([...updated, { role: 'assistant', content: res.data.reply }])
     } catch (err: unknown) {
       const e = err as { response?: { status?: number; data?: { error?: string } } }
@@ -106,8 +119,9 @@ export default function AskAIPage() {
                 <Sparkles className="h-8 w-8 text-white" />
               </div>
               <p className="font-semibold text-gray-800 text-lg">Bible AI Assistant</p>
-              <p className="text-sm text-gray-500 mt-1">Ask questions in English or Tamil</p>
-              <p className="text-xs text-gray-400 mt-1 font-tamil">ஆங்கிலம் அல்லது தமிழில் கேளுங்கள்</p>
+              <p className="text-sm text-gray-500 mt-1">
+                Responds in {LANG_DISPLAY[language] ?? language}
+              </p>
             </div>
             <p className="text-xs font-medium text-gray-400 uppercase tracking-wide text-center">Try asking…</p>
             <div className="grid grid-cols-1 gap-2">
@@ -178,8 +192,8 @@ export default function AskAIPage() {
         <div ref={bottomRef} />
       </div>
 
-      {/* Input bar */}
-      <div className="shrink-0 bg-white border-t border-cream-300 px-4 py-3" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 12px)' }}>
+      {/* Input bar — paddingBottom clears the fixed bottom nav + home indicator */}
+      <div className="shrink-0 bg-white border-t border-cream-300 px-4 py-3" style={{ paddingBottom: 'calc(4rem + env(safe-area-inset-bottom, 0px))' }}>
         <div className="flex items-center gap-2 bg-cream-50 border border-cream-300 rounded-2xl px-4 py-2">
           <input
             ref={inputRef}

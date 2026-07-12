@@ -57,8 +57,8 @@ export const bibleApi = {
 }
 
 export const aiApi = {
-  chat: (message: string, history: { role: string; content: string }[]) =>
-    api.post('/ai/chat', { message, history }, { timeout: 30000 }),
+  chat: (message: string, history: { role: string; content: string }[], lang = 'english') =>
+    api.post('/ai/chat', { message, history, lang }, { timeout: 30000 }),
   explain: (reference: string, verseText: string, lang = 'english') =>
     api.post('/ai/explain', { reference, verseText, lang }, { timeout: 90000 }),
   voiceParse: (text: string) =>

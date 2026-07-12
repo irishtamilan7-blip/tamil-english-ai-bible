@@ -68,12 +68,27 @@ router.post('/chat', async (req, res) => {
     return res.status(503).json({ error: 'AI not configured. Add GROQ_API_KEY to server/.env — get a free key at console.groq.com' })
   }
 
-  const { message, history = [] } = req.body
+  const { message, history = [], lang = 'english' } = req.body
   if (!message?.trim()) return res.status(400).json({ error: 'Message required' })
+
+  const LANG_NAMES = {
+    english: 'English', tamil: 'Tamil', malayalam: 'Malayalam',
+    hindi: 'Hindi', telugu: 'Telugu', kannada: 'Kannada', marathi: 'Marathi',
+    korean: 'Korean', japanese: 'Japanese',
+    chinese_simplified: 'Simplified Chinese', chinese_traditional: 'Traditional Chinese',
+    arabic: 'Arabic', hebrew: 'Hebrew', greek: 'Greek',
+    spanish: 'Spanish', french: 'French', german: 'German', portuguese: 'Portuguese',
+    russian: 'Russian', italian: 'Italian', dutch: 'Dutch', swedish: 'Swedish',
+    turkish: 'Turkish', vietnamese: 'Vietnamese', thai: 'Thai', indonesian: 'Indonesian',
+  }
+  const langName = LANG_NAMES[lang] || 'English'
+  const langInstruction = lang !== 'english'
+    ? `\n\nIMPORTANT: The user has selected ${langName} as their app language. You MUST respond entirely in ${langName}. Do not use English unless the user writes to you in English.`
+    : ''
 
   try {
     const messages = [
-      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'system', content: SYSTEM_PROMPT + langInstruction },
       ...history
         .filter(h => h.role === 'user' || h.role === 'assistant')
         .map(h => ({ role: h.role, content: h.content })),
