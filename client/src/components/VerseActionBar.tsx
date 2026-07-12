@@ -49,6 +49,7 @@ export default function VerseActionBar({ bookId, bookName, bookNameTamil, chapte
   const [showCard, setShowCard]           = useState(false)
   const [explainText, setExplainText]     = useState('')
   const [explainLoading, setExplainLoading] = useState(false)
+  const [explainFetchedLang, setExplainFetchedLang] = useState('')
   const [crossRefs, setCrossRefs]         = useState<{ ref: string; bookId: number; chapterNo: number; verseNo: number; preview: string }[]>([])
   const [crossRefLoading, setCrossRefLoading] = useState(false)
   const [crossRefFetchedLang, setCrossRefFetchedLang] = useState('')
@@ -168,12 +169,16 @@ export default function VerseActionBar({ bookId, bookName, bookNameTamil, chapte
     const next = !showExplain
     setShowHighlight(false); setShowNote(false); setShowShare(false)
     setShowExplain(next)
-    if (next && !explainText) {
-      const explainLang = language === 'tamil' ? 'tamil' : 'english'
+    // Reset if language changed since last fetch
+    const alreadyFetched = explainText && explainFetchedLang === language
+    if (next && !alreadyFetched) {
+      setExplainText('')
+      const explainLang = language
       const cacheKey = `bv_explain_${bookId}_${chapterNo}_${verseNo}_${explainLang}`
       // 1. Check memory cache (same session)
       if (explainCache[cacheKey]) {
         setExplainText(explainCache[cacheKey])
+        setExplainFetchedLang(language)
         return
       }
       // 2. Check localStorage (persists across restarts — no token cost)
@@ -181,6 +186,7 @@ export default function VerseActionBar({ bookId, bookName, bookNameTamil, chapte
       if (stored) {
         explainCache[cacheKey] = stored
         setExplainText(stored)
+        setExplainFetchedLang(language)
         return
       }
       // 3. Fetch from AI (first time only — save to both caches)
@@ -191,6 +197,7 @@ export default function VerseActionBar({ bookId, bookName, bookNameTamil, chapte
         explainCache[cacheKey] = explanation
         try { localStorage.setItem(cacheKey, explanation) } catch {}
         setExplainText(explanation)
+        setExplainFetchedLang(language)
       } catch {
         setExplainText('Could not load explanation. Please try again.')
       } finally {

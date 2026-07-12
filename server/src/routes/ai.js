@@ -106,6 +106,19 @@ router.post('/explain', async (req, res) => {
     return res.json({ explanation: serverExplainCache.get(cacheKey) })
   }
 
+  // Map language key → display name for the AI prompt
+  const LANG_NAMES = {
+    english: 'English', tamil: 'Tamil', malayalam: 'Malayalam',
+    hindi: 'Hindi', telugu: 'Telugu', kannada: 'Kannada', marathi: 'Marathi',
+    korean: 'Korean', japanese: 'Japanese',
+    chinese_simplified: 'Simplified Chinese', chinese_traditional: 'Traditional Chinese',
+    arabic: 'Arabic', hebrew: 'Hebrew', greek: 'Greek',
+    spanish: 'Spanish', french: 'French', german: 'German', portuguese: 'Portuguese',
+    russian: 'Russian', italian: 'Italian', dutch: 'Dutch', swedish: 'Swedish',
+    turkish: 'Turkish', vietnamese: 'Vietnamese', thai: 'Thai', indonesian: 'Indonesian',
+  }
+  const langName = LANG_NAMES[lang] || 'English'
+
   const prompt = lang === 'tamil'
     ? `நீங்கள் ஒரு அன்பான போதகர். "${reference}: ${verseText}" — இந்த வசனத்தை 4 பகுதியில் சுருக்கமாக விளக்குங்கள்:
 
@@ -122,10 +135,10 @@ router.post('/explain', async (req, res) => {
 > ஒரு சுருக்கமான தனிப்பட்ட ஜெபம்.
 
 தமிழில் மட்டும் பதில் அளிக்கவும்.`
-    : `You are a warm pastor. For this verse — ${reference}: "${verseText}" — write a brief 4-part devotional in English only:
+    : `You are a warm pastor. For this verse — ${reference}: "${verseText}" — write a brief 4-part devotional:
 
 ### 🔊 A Personal Message
-Start with "Hey friend," — 2-3 sentences introducing the verse personally.
+Start with a warm greeting — 2-3 sentences introducing the verse personally.
 
 ### 2. Key Word
 Pick one word, explain its depth with a simple metaphor (3-4 sentences).
@@ -136,7 +149,7 @@ Pick one word, explain its depth with a simple metaphor (3-4 sentences).
 ### 🕯️ Prayer
 > A short personal prayer they can pray right now.
 
-Keep it concise and warm. No AI mention.`
+Keep it concise and warm. No AI mention.${lang !== 'english' ? `\n\nIMPORTANT: Write your ENTIRE response in ${langName} only. Do not use English at all.` : ''}`
 
   try {
     const reply = await groqChat([
