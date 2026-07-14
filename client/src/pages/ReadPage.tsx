@@ -70,6 +70,17 @@ export default function ReadPage() {
 
   // Language / version sheet
   const [showLangMenu, setShowLangMenu] = useState(false)
+  const [langKbHeight, setLangKbHeight] = useState(0)
+
+  // Track keyboard height so sheet stays above iOS keyboard
+  useEffect(() => {
+    if (!showLangMenu) { setLangKbHeight(0); return }
+    const vv = window.visualViewport
+    if (!vv) return
+    const update = () => setLangKbHeight(Math.max(0, window.innerHeight - vv.height))
+    vv.addEventListener('resize', update)
+    return () => vv.removeEventListener('resize', update)
+  }, [showLangMenu])
 
   // Version catalog loaded from server
   interface VersionMeta { id: string; name: string; short: string; year: number; free: boolean; available: boolean }
@@ -882,19 +893,38 @@ export default function ReadPage() {
       {/* ── Language + Version selector sheet ─────────────────────────── */}
       {showLangMenu && (
         <>
-          <div className="fixed inset-0 z-40 bg-black/40" onClick={() => setShowLangMenu(false)} />
-          <div className="fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-2xl shadow-2xl max-h-[90vh] flex flex-col">
+          <div className="fixed inset-0 z-[60] bg-black/40" onClick={() => setShowLangMenu(false)} />
+          <div
+            className="fixed left-0 right-0 z-[70] bg-white rounded-t-2xl shadow-2xl flex flex-col"
+            style={
+              langKbHeight > 0
+                ? { bottom: langKbHeight, maxHeight: `calc(90dvh - ${langKbHeight}px)` }
+                : { bottom: 'calc(env(safe-area-inset-bottom, 0px) + 4rem)', maxHeight: 'calc(90dvh - 4rem)' }
+            }
+          >
+            {/* Header with close button */}
             <div className="px-5 pt-4 pb-3 border-b border-cream-200 shrink-0">
-              <p className="font-semibold text-center text-gray-800 text-base mb-3">Choose Language</p>
+              <div className="flex items-center justify-between mb-3">
+                <p className="font-semibold text-gray-800 text-base">Choose Language</p>
+                <button
+                  onClick={() => setShowLangMenu(false)}
+                  className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
               {/* Search box */}
-              <input
-                type="text"
-                value={langSearch}
-                onChange={e => setLangSearch(e.target.value)}
-                placeholder="Search language…"
-                className="w-full px-3 py-2 text-sm border border-cream-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-maroon-400 bg-cream-50"
-                autoComplete="off"
-              />
+              <div className="relative">
+                <svg className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                <input
+                  type="text"
+                  value={langSearch}
+                  onChange={e => setLangSearch(e.target.value)}
+                  placeholder="Search language…"
+                  className="w-full pl-9 pr-4 py-2.5 text-sm border border-cream-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-maroon-400 bg-cream-50"
+                  autoComplete="off"
+                />
+              </div>
             </div>
             <div className="overflow-y-auto flex-1 px-4 py-3">
               {/* Language list */}

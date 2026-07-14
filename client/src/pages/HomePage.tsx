@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { BookOpen, Clock, Search, Mic, CalendarDays, ChevronRight, Globe, Check, X } from 'lucide-react'
+import { BookOpen, Clock, Search, Mic, CalendarDays, ChevronRight, ChevronDown, Globe, Check, X } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useAppStore, type LanguageConfig } from '../store/useAppStore'
 import { bibleApi } from '../utils/api'
@@ -29,6 +29,75 @@ const FALLBACK_LANGS: LanguageConfig[] = [
   { key: 'korean',   native_name: '한국어',   direction: 'ltr', file: 'korean_bible.json' },
   { key: 'spanish',  native_name: 'Español', direction: 'ltr', file: 'spanish_bible.json' },
   { key: 'arabic',   native_name: 'عربي',    direction: 'rtl', file: 'arabic_bible.json' },
+]
+
+// Flag emoji per language key (used in full language list + header button)
+const FLAG: Record<string, string> = {
+  english: '🇬🇧', tamil: '🇮🇳', malayalam: '🇮🇳', hindi: '🇮🇳', telugu: '🇮🇳',
+  kannada: '🇮🇳', marathi: '🇮🇳', korean: '🇰🇷', japanese: '🇯🇵',
+  chinese_simplified: '🇨🇳', chinese_traditional: '🇹🇼',
+  arabic: '🇸🇦', hebrew: '🇮🇱', greek: '🇬🇷',
+  spanish: '🇪🇸', french: '🇫🇷', german: '🇩🇪', portuguese: '🇧🇷',
+  russian: '🇷🇺', italian: '🇮🇹', dutch: '🇳🇱', swedish: '🇸🇪',
+  turkish: '🇹🇷', vietnamese: '🇻🇳', thai: '🇹🇭', indonesian: '🇮🇩',
+  afrikaans: '🇿🇦', albanian: '🇦🇱', armenian: '🇦🇲', burmese: '🇲🇲',
+  croatian: '🇭🇷', czech: '🇨🇿', danish: '🇩🇰', esperanto: '🌍',
+  estonian: '🇪🇪', finnish: '🇫🇮', hungarian: '🇭🇺', latvian: '🇱🇻',
+  lithuanian: '🇱🇹', malagasy: '🇲🇬', maori: '🇳🇿', mongolian: '🇲🇳',
+  norwegian: '🇳🇴', polish: '🇵🇱', romanian: '🇷🇴', serbian: '🇷🇸',
+  shona: '🇿🇼', swahili: '🇹🇿', tagalog: '🇵🇭', ukrainian: '🇺🇦',
+}
+
+// Country list — always shows language sub-picker on selection
+interface CountryEntry { flag: string; name: string; langs: string[] }
+const COUNTRIES: CountryEntry[] = [
+  { flag: '🇺🇸', name: 'United States',   langs: ['english'] },
+  { flag: '🇬🇧', name: 'United Kingdom',  langs: ['english'] },
+  { flag: '🇮🇳', name: 'India',           langs: ['tamil', 'malayalam', 'hindi', 'telugu', 'kannada', 'marathi'] },
+  { flag: '🇰🇷', name: 'South Korea',     langs: ['korean'] },
+  { flag: '🇯🇵', name: 'Japan',           langs: ['japanese'] },
+  { flag: '🇨🇳', name: 'China',           langs: ['chinese_simplified'] },
+  { flag: '🇹🇼', name: 'Taiwan',          langs: ['chinese_traditional'] },
+  { flag: '🇸🇦', name: 'Saudi Arabia',    langs: ['arabic'] },
+  { flag: '🇮🇱', name: 'Israel',          langs: ['hebrew'] },
+  { flag: '🇬🇷', name: 'Greece',          langs: ['greek'] },
+  { flag: '🇪🇸', name: 'Spain',           langs: ['spanish'] },
+  { flag: '🇫🇷', name: 'France',          langs: ['french'] },
+  { flag: '🇩🇪', name: 'Germany',         langs: ['german'] },
+  { flag: '🇧🇷', name: 'Brazil',          langs: ['portuguese'] },
+  { flag: '🇵🇹', name: 'Portugal',        langs: ['portuguese'] },
+  { flag: '🇷🇺', name: 'Russia',          langs: ['russian'] },
+  { flag: '🇮🇹', name: 'Italy',           langs: ['italian'] },
+  { flag: '🇳🇱', name: 'Netherlands',     langs: ['dutch'] },
+  { flag: '🇵🇭', name: 'Philippines',     langs: ['tagalog'] },
+  { flag: '🇹🇭', name: 'Thailand',        langs: ['thai'] },
+  { flag: '🇻🇳', name: 'Vietnam',         langs: ['vietnamese'] },
+  { flag: '🇮🇩', name: 'Indonesia',       langs: ['indonesian'] },
+  { flag: '🇸🇪', name: 'Sweden',          langs: ['swedish'] },
+  { flag: '🇹🇷', name: 'Turkey',          langs: ['turkish'] },
+  { flag: '🇺🇦', name: 'Ukraine',         langs: ['ukrainian'] },
+  { flag: '🇵🇱', name: 'Poland',          langs: ['polish'] },
+  { flag: '🇷🇴', name: 'Romania',         langs: ['romanian'] },
+  { flag: '🇨🇿', name: 'Czech Republic',  langs: ['czech'] },
+  { flag: '🇭🇺', name: 'Hungary',         langs: ['hungarian'] },
+  { flag: '🇩🇰', name: 'Denmark',         langs: ['danish'] },
+  { flag: '🇫🇮', name: 'Finland',         langs: ['finnish'] },
+  { flag: '🇳🇴', name: 'Norway',          langs: ['norwegian'] },
+  { flag: '🇷🇸', name: 'Serbia',          langs: ['serbian'] },
+  { flag: '🇭🇷', name: 'Croatia',         langs: ['croatian'] },
+  { flag: '🇦🇱', name: 'Albania',         langs: ['albanian'] },
+  { flag: '🇦🇲', name: 'Armenia',         langs: ['armenian'] },
+  { flag: '🇲🇲', name: 'Myanmar',         langs: ['burmese'] },
+  { flag: '🇲🇳', name: 'Mongolia',        langs: ['mongolian'] },
+  { flag: '🇲🇬', name: 'Madagascar',      langs: ['malagasy'] },
+  { flag: '🇳🇿', name: 'New Zealand',     langs: ['maori'] },
+  { flag: '🇿🇦', name: 'South Africa',    langs: ['afrikaans'] },
+  { flag: '🇹🇿', name: 'Tanzania',        langs: ['swahili'] },
+  { flag: '🇿🇼', name: 'Zimbabwe',        langs: ['shona'] },
+  { flag: '🇱🇻', name: 'Latvia',          langs: ['latvian'] },
+  { flag: '🇱🇹', name: 'Lithuania',       langs: ['lithuanian'] },
+  { flag: '🇪🇪', name: 'Estonia',         langs: ['estonian'] },
+  { flag: '🌍',  name: 'Esperanto',       langs: ['esperanto'] },
 ]
 
 interface DailyVerse {
@@ -86,9 +155,23 @@ export default function HomePage() {
   const { language, setLanguage, lastRead, searchHistory } = useAppStore()
   const today = new Date().toDateString()
   const [dailyVerse, setDailyVerse] = useState<DailyVerse | null>(() => loadValidVerse(today, language))
-  const [showLangSheet, setShowLangSheet] = useState(false)
-  const [langSearch, setLangSearch]       = useState('')
+  const [showLangSheet, setShowLangSheet]   = useState(false)
+  const [langSearch, setLangSearch]         = useState('')
   const [availableLangs, setAvailableLangs] = useState<LanguageConfig[]>(FALLBACK_LANGS)
+  const [kbHeight, setKbHeight]             = useState(0)
+  const [showCountryPicker, setShowCountryPicker] = useState(false)
+  const [showLangPicker, setShowLangPicker]       = useState(false)
+  const [countrySearch, setCountrySearch]         = useState('')
+
+  // Track keyboard height so the language sheet stays above the iOS keyboard
+  useEffect(() => {
+    if (!showLangSheet) { setKbHeight(0); return }
+    const vv = window.visualViewport
+    if (!vv) return
+    const update = () => setKbHeight(Math.max(0, window.innerHeight - vv.height))
+    vv.addEventListener('resize', update)
+    return () => vv.removeEventListener('resize', update)
+  }, [showLangSheet])
 
   // Prefetch book lists on mount so Old/New Testament pages open instantly
   useEffect(() => { prefetchTestaments(language) }, [language])
@@ -143,25 +226,171 @@ export default function HomePage() {
     l.key.toLowerCase().includes(langSearch.toLowerCase())
   )
 
+  const activeCountry = COUNTRIES.find(c => c.langs.includes(language)) ?? COUNTRIES[0]
+  const countryLangs  = activeCountry.langs
+    .map(k => availableLangs.find(l => l.key === k))
+    .filter(Boolean) as LanguageConfig[]
+
+  function handleCountrySelect(c: CountryEntry) {
+    setShowCountryPicker(false)
+    // Always show language picker so user sees what language they're selecting
+    if (!c.langs.includes(language)) setLanguage(c.langs[0])
+    setShowLangPicker(true)
+  }
+
   return (
-    <div className="max-w-lg mx-auto px-4 py-6 space-y-6">
+    <div className="max-w-lg mx-auto px-4 py-6 space-y-4">
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-bold text-maroon-700 font-serif">Tamil English AI Bible</h1>
           <p className="text-sm text-gray-500 font-tamil">விவிலியம் — Hear the Word</p>
         </div>
-        {/* Language selector button */}
+      </div>
+
+      {/* ── Country + Language two-step selector ─────────────────────── */}
+      <div className="flex gap-3">
+        {/* Step 1 — Country */}
         <button
-          onClick={() => { setShowLangSheet(true); setLangSearch('') }}
-          className="flex items-center gap-1.5 px-3 py-2 bg-maroon-50 border border-maroon-200 rounded-xl text-maroon-700 hover:bg-maroon-100 transition-colors shrink-0 mt-1"
+          onClick={() => setShowCountryPicker(true)}
+          className="flex-1 flex items-center gap-3 px-4 py-3 bg-white border border-cream-300 rounded-2xl shadow-sm active:bg-cream-50 transition-colors"
         >
-          <Globe className="h-4 w-4 shrink-0" />
-          <span className="text-sm font-semibold max-w-[80px] truncate" dir={currentLang?.direction ?? 'ltr'}>
-            {currentLang?.native_name ?? 'English'}
-          </span>
+          <span className="text-2xl leading-none shrink-0">{activeCountry.flag}</span>
+          <div className="flex-1 text-left min-w-0">
+            <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wide">Country</p>
+            <p className="text-sm font-bold text-gray-800 truncate">{activeCountry.name}</p>
+          </div>
+          <ChevronDown className="h-4 w-4 text-gray-400 shrink-0" />
+        </button>
+
+        {/* Step 2 — Language (only shown when country has multiple langs) */}
+        <button
+          onClick={() => setShowLangPicker(true)}
+          className="flex-1 flex items-center gap-3 px-4 py-3 bg-maroon-700 border border-maroon-700 rounded-2xl shadow-sm active:bg-maroon-800 transition-colors"
+        >
+          <div className="flex-1 text-left min-w-0">
+            <p className="text-[10px] text-maroon-300 font-medium uppercase tracking-wide">Language</p>
+            <p className="text-sm font-bold text-white truncate" dir={currentLang?.direction ?? 'ltr'}>
+              {currentLang?.native_name ?? 'English'}
+            </p>
+          </div>
+          <ChevronDown className="h-4 w-4 text-maroon-300 shrink-0" />
         </button>
       </div>
+
+      {/* ── Country picker sheet ──────────────────────────────────────── */}
+      {showCountryPicker && (
+        <>
+          <div className="fixed inset-0 z-[60] bg-black/50" onClick={() => { setShowCountryPicker(false); setCountrySearch('') }} />
+          <div
+            className="fixed left-0 right-0 z-[70] bg-white rounded-t-2xl shadow-2xl flex flex-col"
+            style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 4rem)', maxHeight: 'calc(88dvh - 4rem)' }}
+          >
+            {/* Header */}
+            <div className="px-5 pt-4 pb-3 border-b border-cream-200 shrink-0">
+              <div className="flex items-center justify-between mb-3">
+                <p className="font-bold text-gray-800 text-base">Select Country</p>
+                <button onClick={() => { setShowCountryPicker(false); setCountrySearch('') }} className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100">
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+              {/* Search */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <input
+                  type="text"
+                  value={countrySearch}
+                  onChange={e => setCountrySearch(e.target.value)}
+                  placeholder="Search country…"
+                  className="w-full pl-9 pr-4 py-2.5 text-sm border border-cream-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-maroon-400 bg-cream-50"
+                  autoComplete="off"
+                />
+              </div>
+            </div>
+
+            {/* Scrollable country grid */}
+            <div className="overflow-y-auto flex-1 px-4 py-3">
+              <div className="grid grid-cols-2 gap-2">
+                {COUNTRIES
+                  .filter(c => !countrySearch || c.name.toLowerCase().includes(countrySearch.toLowerCase()))
+                  .map(c => {
+                    const active = c.langs.includes(language)
+                    return (
+                      <button
+                        key={c.flag + c.name}
+                        onClick={() => handleCountrySelect(c)}
+                        className={clsx(
+                          'flex items-center gap-3 px-4 py-3 rounded-2xl border transition-all active:scale-95',
+                          active ? 'bg-maroon-700 border-maroon-700' : 'bg-cream-50 border-cream-200 active:bg-cream-100'
+                        )}
+                      >
+                        <span className="text-2xl leading-none shrink-0">{c.flag}</span>
+                        <div className="flex-1 text-left min-w-0">
+                          <p className={clsx('font-semibold text-sm leading-tight truncate', active ? 'text-white' : 'text-gray-800')}>
+                            {c.name}
+                          </p>
+                          {c.langs.length > 1 && (
+                            <p className={clsx('text-[10px] mt-0.5', active ? 'text-maroon-200' : 'text-gray-400')}>
+                              {c.langs.length} languages
+                            </p>
+                          )}
+                        </div>
+                        {active && <Check className="h-4 w-4 text-white shrink-0" />}
+                      </button>
+                    )
+                  })}
+                {COUNTRIES.filter(c => !countrySearch || c.name.toLowerCase().includes(countrySearch.toLowerCase())).length === 0 && (
+                  <p className="col-span-2 text-center text-sm text-gray-400 py-8">No country found</p>
+                )}
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ── Language picker sheet (for multi-lang countries) ──────────── */}
+      {showLangPicker && (
+        <>
+          <div className="fixed inset-0 z-[80] bg-black/50" onClick={() => setShowLangPicker(false)} />
+          <div
+            className="fixed left-0 right-0 z-[90] bg-white rounded-t-2xl shadow-2xl"
+            style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 4rem)' }}
+          >
+            <div className="px-5 pt-4 pb-3 border-b border-cream-200 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-2xl">{activeCountry.flag}</span>
+                <p className="font-bold text-gray-800 text-base">{activeCountry.name} — Select Language</p>
+              </div>
+              <button onClick={() => setShowLangPicker(false)} className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="px-4 py-3 grid grid-cols-2 gap-2">
+              {countryLangs.map(l => {
+                const sel = language === l.key
+                return (
+                  <button
+                    key={l.key}
+                    onClick={() => { setLanguage(l.key); setShowLangPicker(false) }}
+                    className={clsx(
+                      'flex flex-col items-start px-4 py-3.5 rounded-2xl border transition-all active:scale-95',
+                      sel ? 'bg-maroon-700 border-maroon-700' : 'bg-cream-50 border-cream-200 active:bg-cream-100'
+                    )}
+                  >
+                    <p className={clsx('font-bold text-xl leading-tight', sel ? 'text-white' : 'text-gray-800')} dir={l.direction}>
+                      {l.native_name}
+                    </p>
+                    <p className={clsx('text-xs capitalize mt-1', sel ? 'text-maroon-200' : 'text-gray-400')}>
+                      {l.key}
+                    </p>
+                    {sel && <span className="text-maroon-200 text-[10px] mt-0.5">✓ Selected</span>}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Daily Verse */}
       <div className="bg-maroon-700 rounded-2xl p-5 text-white">
@@ -300,8 +529,15 @@ export default function HomePage() {
       {/* ── Language selector bottom sheet ───────────────────────────── */}
       {showLangSheet && (
         <>
-          <div className="fixed inset-0 z-40 bg-black/50" onClick={() => setShowLangSheet(false)} />
-          <div className="fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-2xl shadow-2xl flex flex-col max-h-[85vh]">
+          <div className="fixed inset-0 z-[60] bg-black/50" onClick={() => setShowLangSheet(false)} />
+          <div
+            className="fixed left-0 right-0 z-[70] bg-white rounded-t-2xl shadow-2xl flex flex-col"
+            style={
+              kbHeight > 0
+                ? { bottom: kbHeight, maxHeight: `calc(85dvh - ${kbHeight}px)` }
+                : { bottom: 'calc(env(safe-area-inset-bottom, 0px) + 4rem)', maxHeight: 'calc(85dvh - 4rem)' }
+            }
+          >
             {/* Sheet header */}
             <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-cream-200 shrink-0">
               <div className="flex items-center gap-2">
@@ -338,21 +574,20 @@ export default function HomePage() {
                   key={l.key}
                   onClick={() => { setLanguage(l.key); setShowLangSheet(false) }}
                   className={clsx(
-                    'w-full flex items-center gap-4 px-4 py-3 rounded-2xl transition-colors text-left',
+                    'w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-colors text-left',
                     language === l.key
                       ? 'bg-maroon-700 text-white shadow-sm'
                       : 'bg-cream-50 border border-cream-200 text-gray-800 hover:bg-cream-100 active:bg-cream-200'
                   )}
                 >
+                  <span className="text-2xl leading-none shrink-0">{FLAG[l.key] ?? '🌐'}</span>
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-base leading-tight" dir={l.direction}>
                       {l.native_name}
                     </p>
-                    {l.key !== 'english' && l.key !== 'tamil' && (
-                      <p className={clsx('text-xs mt-0.5 capitalize', language === l.key ? 'text-maroon-200' : 'text-gray-400')}>
-                        {l.key.replace(/_/g, ' ')}
-                      </p>
-                    )}
+                    <p className={clsx('text-xs mt-0.5 capitalize', language === l.key ? 'text-maroon-200' : 'text-gray-400')}>
+                      {l.key.replace(/_/g, ' ')}
+                    </p>
                   </div>
                   {language === l.key
                     ? <Check className="h-5 w-5 shrink-0" />

@@ -1,0 +1,278 @@
+[
+  {
+    "key": "english",
+    "native_name": "English",
+    "direction": "ltr",
+    "file": "english_bible.json"
+  },
+  {
+    "key": "tamil",
+    "native_name": "தமிழ்",
+    "direction": "ltr",
+    "file": "tamil_bible.json"
+  },
+  {
+    "key": "malayalam",
+    "native_name": "മലയാളം",
+    "direction": "ltr",
+    "file": "malayalam_bible.json"
+  },
+  {
+    "key": "arabic",
+    "native_name": "عربي",
+    "direction": "rtl",
+    "file": "arabic_bible.json"
+  },
+  {
+    "key": "chinese_simplified",
+    "native_name": "中文 (简体)",
+    "direction": "ltr",
+    "file": "chinese_simplified_bible.json"
+  },
+  {
+    "key": "chinese_traditional",
+    "native_name": "中文 (繁體)",
+    "direction": "ltr",
+    "file": "chinese_traditional_bible.json"
+  },
+  {
+    "key": "korean",
+    "native_name": "한국어",
+    "direction": "ltr",
+    "file": "korean_bible.json"
+  },
+  {
+    "key": "japanese",
+    "native_name": "日本語",
+    "direction": "ltr",
+    "file": "japanese_bible.json"
+  },
+  {
+    "key": "thai",
+    "native_name": "ภาษาไทย",
+    "direction": "ltr",
+    "file": "thai_bible.json"
+  },
+  {
+    "key": "vietnamese",
+    "native_name": "Tiếng Việt",
+    "direction": "ltr",
+    "file": "vietnamese_bible.json"
+  },
+  {
+    "key": "tagalog",
+    "native_name": "Tagalog",
+    "direction": "ltr",
+    "file": "tagalog_bible.json"
+  },
+  {
+    "key": "russian",
+    "native_name": "Русский",
+    "direction": "ltr",
+    "file": "russian_bible.json"
+  },
+  {
+    "key": "spanish",
+    "native_name": "Español",
+    "direction": "ltr",
+    "file": "spanish_bible.json"
+  },
+  {
+    "key": "french",
+    "native_name": "Français",
+    "direction": "ltr",
+    "file": "french_bible.json"
+  },
+  {
+    "key": "german",
+    "native_name": "Deutsch",
+    "direction": "ltr",
+    "file": "german_bible.json"
+  },
+  {
+    "key": "portuguese",
+    "native_name": "Português",
+    "direction": "ltr",
+    "file": "portuguese_bible.json"
+  },
+  {
+    "key": "swahili",
+    "native_name": "Kiswahili",
+    "direction": "ltr",
+    "file": "swahili_bible.json"
+  },
+  {
+    "key": "turkish",
+    "native_name": "Türkçe",
+    "direction": "ltr",
+    "file": "turkish_bible.json"
+  },
+  {
+    "key": "mongolian",
+    "native_name": "Монгол",
+    "direction": "ltr",
+    "file": "mongolian_bible.json"
+  },
+  {
+    "key": "afrikaans",
+    "native_name": "Afrikaans",
+    "direction": "ltr",
+    "file": "afrikaans_bible.json"
+  },
+  {
+    "key": "albanian",
+    "native_name": "Shqip",
+    "direction": "ltr",
+    "file": "albanian_bible.json"
+  },
+  {
+    "key": "armenian",
+    "native_name": "Հայերեն",
+    "direction": "ltr",
+    "file": "armenian_bible.json"
+  },
+  {
+    "key": "croatian",
+    "native_name": "Hrvatski",
+    "direction": "ltr",
+    "file": "croatian_bible.json"
+  },
+  {
+    "key": "czech",
+    "native_name": "Čeština",
+    "direction": "ltr",
+    "file": "czech_bible.json"
+  },
+  {
+    "key": "danish",
+    "native_name": "Dansk",
+    "direction": "ltr",
+    "file": "danish_bible.json"
+  },
+  {
+    "key": "dutch",
+    "native_name": "Nederlands",
+    "direction": "ltr",
+    "file": "dutch_bible.json"
+  },
+  {
+    "key": "estonian",
+    "native_name": "Eesti",
+    "direction": "ltr",
+    "file": "estonian_bible.json"
+  },
+  {
+    "key": "finnish",
+    "native_name": "Suomi",
+    "direction": "ltr",
+    "file": "finnish_bible.json"
+  },
+  {
+    "key": "hungarian",
+    "native_name": "Magyar",
+    "direction": "ltr",
+    "file": "hungarian_bible.json"
+  },
+  {
+    "key": "italian",
+    "native_name": "Italiano",
+    "direction": "ltr",
+    "file": "italian_bible.json"
+  },
+  {
+    "key": "latvian",
+    "native_name": "Latviešu",
+    "direction": "ltr",
+    "file": "latvian_bible.json"
+  },
+  {
+    "key": "lithuanian",
+    "native_name": "Lietuvių",
+    "direction": "ltr",
+    "file": "lithuanian_bible.json"
+  },
+  {
+    "key": "malagasy",
+    "native_name": "Malagasy",
+    "direction": "ltr",
+    "file": "malagasy_bible.json"
+  },
+  {
+    "key": "maori",
+    "native_name": "Māori",
+    "direction": "ltr",
+    "file": "maori_bible.json"
+  },
+  {
+    "key": "norwegian",
+    "native_name": "Norsk",
+    "direction": "ltr",
+    "file": "norwegian_bible.json"
+  },
+  {
+    "key": "polish",
+    "native_name": "Polski",
+    "direction": "ltr",
+    "file": "polish_bible.json"
+  },
+  {
+    "key": "romanian",
+    "native_name": "Română",
+    "direction": "ltr",
+    "file": "romanian_bible.json"
+  },
+  {
+    "key": "serbian",
+    "native_name": "Српски",
+    "direction": "ltr",
+    "file": "serbian_bible.json"
+  },
+  {
+    "key": "shona",
+    "native_name": "Shona",
+    "direction": "ltr",
+    "file": "shona_bible.json"
+  },
+  {
+    "key": "swedish",
+    "native_name": "Svenska",
+    "direction": "ltr",
+    "file": "swedish_bible.json"
+  },
+  {
+    "key": "ukrainian",
+    "native_name": "Українська",
+    "direction": "ltr",
+    "file": "ukrainian_bible.json"
+  },
+  {
+    "key": "burmese",
+    "native_name": "မြန်မာ",
+    "direction": "ltr",
+    "file": "burmese_bible.json"
+  },
+  {
+    "key": "greek",
+    "native_name": "Ελληνικά",
+    "direction": "ltr",
+    "file": "greek_bible.json"
+  },
+  {
+    "key": "hebrew",
+    "native_name": "עברית",
+    "direction": "rtl",
+    "file": "hebrew_bible.json"
+  },
+  {
+    "key": "esperanto",
+    "native_name": "Esperanto",
+    "direction": "ltr",
+    "file": "esperanto_bible.json"
+  },
+  {
+    "key": "dari",
+    "native_name": "دری",
+    "direction": "rtl",
+    "file": "dari_bible.json"
+  }
+]

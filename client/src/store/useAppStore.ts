@@ -2,6 +2,37 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
 export type Language = string  // 'english', 'tamil', 'malayalam', 'korean', etc.
+
+// Map device locale to app language key — called once per app open
+function detectLocale(): Language {
+  const raw = navigator.language || (navigator.languages?.[0]) || 'en'
+  const lower = raw.toLowerCase()
+  const lang = lower.split('-')[0]
+  const region = lower.split('-')[1] || ''
+
+  if (lang === 'zh') {
+    return (region === 'tw' || region === 'hk' || lower.includes('hant'))
+      ? 'chinese_traditional'
+      : 'chinese_simplified'
+  }
+
+  const MAP: Record<string, Language> = {
+    ta: 'tamil', ml: 'malayalam', hi: 'hindi', te: 'telugu',
+    kn: 'kannada', mr: 'marathi', ko: 'korean', ja: 'japanese',
+    ar: 'arabic', he: 'hebrew', iw: 'hebrew', el: 'greek',
+    es: 'spanish', fr: 'french', de: 'german', pt: 'portuguese',
+    ru: 'russian', it: 'italian', nl: 'dutch', sv: 'swedish',
+    tr: 'turkish', vi: 'vietnamese', th: 'thai', id: 'indonesian',
+    af: 'afrikaans', sq: 'albanian', hy: 'armenian', my: 'burmese',
+    hr: 'croatian', cs: 'czech', da: 'danish', eo: 'esperanto',
+    et: 'estonian', fi: 'finnish', hu: 'hungarian', lv: 'latvian',
+    lt: 'lithuanian', mg: 'malagasy', mi: 'maori', mn: 'mongolian',
+    no: 'norwegian', pl: 'polish', ro: 'romanian', sr: 'serbian',
+    sn: 'shona', sw: 'swahili', tl: 'tagalog', uk: 'ukrainian',
+  }
+
+  return MAP[lang] ?? 'english'
+}
 export type Theme = 'light' | 'dark' | 'sepia'
 export type FontSize = number // 12–32
 
@@ -54,7 +85,7 @@ interface AppState {
 export const useAppStore = create<AppState>()(
   persist(
     (set, get) => ({
-      language: 'english',
+      language: detectLocale(),
       showBilingual: false,
       theme: 'light',
       fontSize: 18,
