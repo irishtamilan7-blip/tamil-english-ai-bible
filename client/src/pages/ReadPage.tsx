@@ -55,6 +55,7 @@ export default function ReadPage() {
   const [loading, setLoading]         = useState(!_initChapter)
   const [loadError, setLoadError]     = useState(false)
   const [loadingSlow, setLoadingSlow] = useState(false)
+  const [englishFallback, setEnglishFallback] = useState(false)
   const slowTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [selectedVerse, setSelectedVerse] = useState<number | null>(null)
   const [showSettings, setShowSettings]   = useState(false)
@@ -243,34 +244,50 @@ export default function ReadPage() {
 
     let loaded = false
     let lastErr: unknown
-    for (let attempt = 1; attempt <= 3; attempt++) {
-      try {
-        const res = await bibleApi.getChapter(parseInt(bId), parseInt(chId), lang, isBilingual, bibleVersion, 12000)
-        if (slowTimer.current) clearTimeout(slowTimer.current)
-        chapterCache[cacheKey] = res.data
-        const chNo = parseInt(chId)
-        if (res.data.has_prev) {
-          const pk = `${bId}-${chNo - 1}-${lang}-${isBilingual}-${bibleVersion}`
-          if (!chapterCache[pk]) bibleApi.getChapter(parseInt(bId), chNo - 1, lang, isBilingual, bibleVersion).then(r => { chapterCache[pk] = r.data }).catch(() => {})
+    let usedFallback = false
+    const tryLoad = async (loadLang: string) => {
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          const res = await bibleApi.getChapter(parseInt(bId), parseInt(chId), loadLang, isBilingual, bibleVersion, 12000)
+          if (slowTimer.current) clearTimeout(slowTimer.current)
+          chapterCache[cacheKey] = res.data
+          const chNo = parseInt(chId)
+          if (res.data.has_prev) {
+            const pk = `${bId}-${chNo - 1}-${lang}-${isBilingual}-${bibleVersion}`
+            if (!chapterCache[pk]) bibleApi.getChapter(parseInt(bId), chNo - 1, loadLang, isBilingual, bibleVersion).then(r => { chapterCache[pk] = r.data }).catch(() => {})
+          }
+          if (res.data.has_next) {
+            const nk = `${bId}-${chNo + 1}-${lang}-${isBilingual}-${bibleVersion}`
+            if (!chapterCache[nk]) bibleApi.getChapter(parseInt(bId), chNo + 1, loadLang, isBilingual, bibleVersion).then(r => { chapterCache[nk] = r.data }).catch(() => {})
+          }
+          setChapter(res.data)
+          setLastRead({ bookId: parseInt(bId), bookName: res.data.book_name_english, chapterNo: parseInt(chId) })
+          document.querySelector('main')?.scrollTo({ top: 0 })
+          setLoadError(false)
+          setLoadingSlow(false)
+          loaded = true
+          return true
+        } catch (err) {
+          lastErr = err
+          if (attempt < 3) await new Promise(r => setTimeout(r, 800 * attempt))
         }
-        if (res.data.has_next) {
-          const nk = `${bId}-${chNo + 1}-${lang}-${isBilingual}-${bibleVersion}`
-          if (!chapterCache[nk]) bibleApi.getChapter(parseInt(bId), chNo + 1, lang, isBilingual, bibleVersion).then(r => { chapterCache[nk] = r.data }).catch(() => {})
-        }
-        setChapter(res.data)
-        setLastRead({ bookId: parseInt(bId), bookName: res.data.book_name_english, chapterNo: parseInt(chId) })
-        document.querySelector('main')?.scrollTo({ top: 0 })
-        setLoadError(false)
-        setLoadingSlow(false)
-        loaded = true
-        break
-      } catch (err) {
-        lastErr = err
-        if (attempt < 3) await new Promise(r => setTimeout(r, 800 * attempt))
       }
+      return false
     }
+
+    const ok = await tryLoad(lang)
+    if (!ok && lang !== 'english') {
+      // Old Testament not available in this language — fall back to English
+      usedFallback = await tryLoad('english')
+      if (usedFallback) loaded = true
+    } else if (ok) {
+      loaded = true
+    }
+
     if (slowTimer.current) clearTimeout(slowTimer.current)
     if (!loaded) { console.error('loadChapter failed:', lastErr); setLoadError(true) }
+    if (usedFallback) setEnglishFallback(true)
+    else setEnglishFallback(false)
     setLoading(false)
     setLoadingSlow(false)
   }, [lang, isBilingual, bibleVersion, setLastRead])
@@ -379,39 +396,83 @@ export default function ReadPage() {
     }
   }
 
+  // BCP-47 → Google Translate lang code (for direct client-side TTS fallback)
+  const TTS_GOOGLE_LANG: Record<string, string> = {
+    'ta-IN': 'ta', 'ml-IN': 'ml', 'hi-IN': 'hi', 'te-IN': 'te',
+    'kn-IN': 'kn', 'mr-IN': 'mr', 'en-IN': 'en',
+    'ko-KR': 'ko', 'ja-JP': 'ja', 'zh-CN': 'zh-CN', 'zh-TW': 'zh-TW',
+    'ar-SA': 'ar', 'he-IL': 'iw', 'el-GR': 'el',
+    'es-ES': 'es', 'fr-FR': 'fr', 'de-DE': 'de', 'pt-BR': 'pt',
+    'ru-RU': 'ru', 'it-IT': 'it', 'nl-NL': 'nl', 'sv-SE': 'sv',
+    'tr-TR': 'tr', 'vi-VN': 'vi', 'th-TH': 'th', 'id-ID': 'id',
+  }
+
+  function splitChunks(text: string, maxLen = 180): string[] {
+    const words = text.split(' ')
+    const chunks: string[] = []
+    let cur = ''
+    for (const w of words) {
+      if (cur.length + w.length + 1 > maxLen) { if (cur) chunks.push(cur); cur = w }
+      else cur += (cur ? ' ' : '') + w
+    }
+    if (cur) chunks.push(cur)
+    return chunks.length ? chunks : [text.slice(0, maxLen)]
+  }
+
+  // Calls Google Translate TTS directly — CapacitorHttp routes fetch() through
+  // native iOS/Android HTTP so there are no CORS issues. No server needed.
+  async function speakAtGoogleTTS(verses: Verse[], idx: number) {
+    if (idx >= verses.length || audioStopped.current) { stopAudio(); return }
+    const v = verses[idx]
+    setAudioVerse(v.verse_no)
+    setTimeout(() => verseRefs.current.get(v.verse_no)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 80)
+
+    const gLang = TTS_GOOGLE_LANG[ttsLang] || ttsLang.split('-')[0]
+    const chunks = splitChunks(cleanForSpeech(v.text))
+
+    const playChunk = (ci: number) => {
+      if (ci >= chunks.length || audioStopped.current) {
+        if (!audioStopped.current) speakAtGoogleTTS(verses, idx + 1)
+        return
+      }
+      // Play directly via Audio element — uses iOS AVFoundation media loading,
+      // bypasses CapacitorHttp and CORS entirely. No fetch needed.
+      const url = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(chunks[ci])}&tl=${gLang}&client=tw-ob`
+      const el = new Audio(url)
+      audioElRef.current = el
+      el.onended = () => playChunk(ci + 1)
+      el.onerror = () => stopAudio()
+      el.play().catch(() => stopAudio())
+    }
+
+    playChunk(0)
+  }
+
   async function speakAtNative(verses: Verse[], idx: number) {
     if (idx >= verses.length || audioStopped.current) { stopAudio(); return }
     const v = verses[idx]
     setAudioVerse(v.verse_no)
     setTimeout(() => verseRefs.current.get(v.verse_no)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 80)
-    try {
-      await TextToSpeech.speak({
-        text: cleanForSpeech(v.text),
-        lang: ttsLang,
-        rate: isEnglish ? 0.88 : 0.82,
-        pitch: 1.0,
-        volume: 1.0,
-        category: 'ambient',
-      })
-      if (!audioStopped.current) speakAtNative(verses, idx + 1)
-    } catch {
-      // Voice for this language not installed — fall back to English TTS
-      if (ttsLang !== 'en-IN') {
-        try {
-          await TextToSpeech.speak({
-            text: cleanForSpeech(v.text),
-            lang: 'en-IN',
-            rate: 0.88,
-            pitch: 1.0,
-            volume: 1.0,
-            category: 'ambient',
-          })
-          if (!audioStopped.current) speakAtNative(verses, idx + 1)
-          return
-        } catch { /* ignore */ }
+
+    const MIN_SPEAK_MS = 400
+
+    const trySpeak = async (lang: string, rate: number): Promise<'ok' | 'silent' | 'error'> => {
+      const t0 = Date.now()
+      try {
+        await TextToSpeech.speak({ text: cleanForSpeech(v.text), lang, rate, pitch: 1.0, volume: 1.0, category: 'ambient' })
+        return Date.now() - t0 < MIN_SPEAK_MS ? 'silent' : 'ok'
+      } catch {
+        return 'error'
       }
-      stopAudio()
     }
+
+    const result = await trySpeak(ttsLang, isEnglish ? 0.88 : 0.82)
+    if (result === 'ok') {
+      if (!audioStopped.current) speakAtNative(verses, idx + 1)
+      return
+    }
+
+    speakAtGoogleTTS(verses, idx)
   }
 
   function speakAt(verses: Verse[], idx: number) {
@@ -715,6 +776,11 @@ export default function ReadPage() {
 
       {/* ── Chapter content — tap any English word to see dictionary */}
       <div className="px-5 py-6">
+        {englishFallback && (
+          <div className="mb-4 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700 text-center">
+            Old Testament not available in this language yet — showing English
+          </div>
+        )}
         <h2 className="text-2xl font-bold text-maroon-700 font-serif mb-3 text-center">
           Chapter {chapter.chapter_no}
         </h2>
@@ -786,13 +852,13 @@ export default function ReadPage() {
                     </button>
                   </div>
                   {/* Two-column: English (other_lang) left, primary language right */}
-                  <div className="grid grid-cols-2">
+                  <div className="grid grid-cols-2" style={{ overflow: 'hidden' }}>
                     <p className={clsx('text-gray-800 px-3 py-2.5 border-r border-cream-200', lineSpacingClass)}
-                       style={{ fontSize: Math.max(fontSize - 2, 13) }}>
+                       style={{ fontSize: Math.max(fontSize - 2, 13), minWidth: 0, overflowWrap: 'break-word' }}>
                       {renderWords(tamilVerse?.text || '')}
                     </p>
                     <p className={clsx('text-gray-700 px-3 py-2.5', lineSpacingClass, language === 'tamil' && 'font-tamil')}
-                       style={{ fontSize: Math.max(fontSize - 3, 12) }}
+                       style={{ fontSize: Math.max(fontSize - 3, 12), minWidth: 0, overflowWrap: 'break-word' }}
                        dir={currentLangCfg?.direction ?? 'ltr'}>
                       {v.text}
                     </p>

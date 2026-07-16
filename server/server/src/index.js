@@ -21,6 +21,7 @@ app.use('/api/bible', require('./routes/bible'))
 app.use('/api/voice', require('./routes/voice'))
 app.use('/api/contact', require('./routes/contact'))
 app.use('/api/ai', require('./routes/ai'))
+app.use('/api/tts', require('./routes/tts'))
 
 // 404
 app.use((req, res) => {

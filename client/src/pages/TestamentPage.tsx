@@ -15,11 +15,14 @@ export default function TestamentPage() {
   const cached = testamentBooksCache[cacheKey]
   const [books, setBooks] = useState<BookMeta[]>(cached ?? [])
   const [loading, setLoading] = useState(!cached)
-  const [error, setError]   = useState(false)
 
-  function fetchBooks() {
+  useEffect(() => {
+    if (testamentBooksCache[cacheKey]) {
+      setBooks(testamentBooksCache[cacheKey]!)
+      setLoading(false)
+      return
+    }
     setLoading(true)
-    setError(false)
     bibleApi.getBooks(language)
       .then((res) => {
         const all: BookMeta[] = res.data.books
@@ -30,17 +33,7 @@ export default function TestamentPage() {
         all.forEach(b => { bookCache[b.id] = b })
         setBooks(type === 'old' ? old : nw)
       })
-      .catch(() => setError(true))
       .finally(() => setLoading(false))
-  }
-
-  useEffect(() => {
-    if (testamentBooksCache[cacheKey]) {
-      setBooks(testamentBooksCache[cacheKey]!)
-      setLoading(false)
-      return
-    }
-    fetchBooks()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [type, language])
 
@@ -70,16 +63,6 @@ export default function TestamentPage() {
           {Array(type === 'old' ? 39 : 27).fill(0).map((_, i) => (
             <div key={i} className="h-20 bg-cream-200 rounded-xl animate-pulse" />
           ))}
-        </div>
-      ) : error ? (
-        <div className="text-center py-16 space-y-3">
-          <p className="text-gray-500 text-sm">Could not load books. Check your connection.</p>
-          <button
-            onClick={fetchBooks}
-            className="px-5 py-2.5 bg-maroon-700 text-white text-sm font-semibold rounded-xl active:bg-maroon-800"
-          >
-            Retry
-          </button>
         </div>
       ) : (
         <div className="grid grid-cols-3 gap-3">
