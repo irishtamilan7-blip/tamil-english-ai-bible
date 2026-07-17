@@ -402,7 +402,7 @@ export default function ReadPage() {
   const TTS_GOOGLE_LANG: Record<string, string> = {
     'ta-IN': 'ta', 'ml-IN': 'ml', 'hi-IN': 'hi', 'te-IN': 'te',
     'kn-IN': 'kn', 'mr-IN': 'mr', 'en-IN': 'en',
-    'as-IN': 'as', 'bn-IN': 'bn', 'gu-IN': 'gu', 'ne-NP': 'ne',
+    'as-IN': 'bn', 'bn-IN': 'bn', 'gu-IN': 'gu', 'ne-NP': 'ne',
     'or-IN': 'or', 'ur-PK': 'ur', 'pa-IN': 'pa',
     'ko-KR': 'ko', 'ja-JP': 'ja', 'zh-CN': 'zh-CN', 'zh-TW': 'zh-TW',
     'ar-SA': 'ar', 'he-IL': 'iw', 'el-GR': 'el',
