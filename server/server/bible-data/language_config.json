@@ -274,5 +274,47 @@
     "native_name": "دری",
     "direction": "rtl",
     "file": "dari_bible.json"
+  },
+  {
+    "key": "assamese",
+    "native_name": "অসমীয়া",
+    "direction": "ltr",
+    "file": "assamese_bible.json"
+  },
+  {
+    "key": "bengali",
+    "native_name": "বাংলা",
+    "direction": "ltr",
+    "file": "bengali_bible.json"
+  },
+  {
+    "key": "gujarati",
+    "native_name": "ગુજરાતી",
+    "direction": "ltr",
+    "file": "gujarati_bible.json"
+  },
+  {
+    "key": "nepali",
+    "native_name": "नेपाली",
+    "direction": "ltr",
+    "file": "nepali_bible.json"
+  },
+  {
+    "key": "oriya",
+    "native_name": "ଓଡ଼ିଆ",
+    "direction": "ltr",
+    "file": "oriya_bible.json"
+  },
+  {
+    "key": "urdu",
+    "native_name": "اردو",
+    "direction": "rtl",
+    "file": "urdu_bible.json"
+  },
+  {
+    "key": "chhattisgarhi",
+    "native_name": "Chhattisgarhi",
+    "direction": "ltr",
+    "file": "chhattisgarhi_bible.json"
   }
 ]

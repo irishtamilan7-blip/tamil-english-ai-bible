@@ -340,6 +340,8 @@ export default function ReadPage() {
   const TTS_LANG: Record<string, string> = {
     english: 'en-IN', tamil: 'ta-IN', malayalam: 'ml-IN',
     hindi: 'hi-IN', telugu: 'te-IN', kannada: 'kn-IN', marathi: 'mr-IN',
+    assamese: 'as-IN', bengali: 'bn-IN', gujarati: 'gu-IN',
+    nepali: 'ne-NP', oriya: 'or-IN', urdu: 'ur-PK', chhattisgarhi: 'hi-IN',
     korean: 'ko-KR', japanese: 'ja-JP', chinese_simplified: 'zh-CN', chinese_traditional: 'zh-TW',
     arabic: 'ar-SA', hebrew: 'he-IL', greek: 'el-GR',
     spanish: 'es-ES', french: 'fr-FR', german: 'de-DE', portuguese: 'pt-BR',
@@ -400,6 +402,8 @@ export default function ReadPage() {
   const TTS_GOOGLE_LANG: Record<string, string> = {
     'ta-IN': 'ta', 'ml-IN': 'ml', 'hi-IN': 'hi', 'te-IN': 'te',
     'kn-IN': 'kn', 'mr-IN': 'mr', 'en-IN': 'en',
+    'as-IN': 'as', 'bn-IN': 'bn', 'gu-IN': 'gu', 'ne-NP': 'ne',
+    'or-IN': 'or', 'ur-PK': 'ur', 'pa-IN': 'pa',
     'ko-KR': 'ko', 'ja-JP': 'ja', 'zh-CN': 'zh-CN', 'zh-TW': 'zh-TW',
     'ar-SA': 'ar', 'he-IL': 'iw', 'el-GR': 'el',
     'es-ES': 'es', 'fr-FR': 'fr', 'de-DE': 'de', 'pt-BR': 'pt',

@@ -34,7 +34,9 @@ const FALLBACK_LANGS: LanguageConfig[] = [
 // Flag emoji per language key (used in full language list + header button)
 const FLAG: Record<string, string> = {
   english: '🇬🇧', tamil: '🇮🇳', malayalam: '🇮🇳', hindi: '🇮🇳', telugu: '🇮🇳',
-  kannada: '🇮🇳', marathi: '🇮🇳', korean: '🇰🇷', japanese: '🇯🇵',
+  kannada: '🇮🇳', marathi: '🇮🇳', assamese: '🇮🇳', bengali: '🇧🇩', gujarati: '🇮🇳',
+  nepali: '🇳🇵', oriya: '🇮🇳', urdu: '🇵🇰', chhattisgarhi: '🇮🇳',
+  korean: '🇰🇷', japanese: '🇯🇵',
   chinese_simplified: '🇨🇳', chinese_traditional: '🇹🇼',
   arabic: '🇸🇦', hebrew: '🇮🇱', greek: '🇬🇷',
   spanish: '🇪🇸', french: '🇫🇷', german: '🇩🇪', portuguese: '🇧🇷',
@@ -53,7 +55,10 @@ interface CountryEntry { flag: string; name: string; langs: string[] }
 const COUNTRIES: CountryEntry[] = [
   { flag: '🇺🇸', name: 'United States',   langs: ['english'] },
   { flag: '🇬🇧', name: 'United Kingdom',  langs: ['english'] },
-  { flag: '🇮🇳', name: 'India',           langs: ['tamil', 'malayalam', 'hindi', 'telugu', 'kannada', 'marathi'] },
+  { flag: '🇮🇳', name: 'India',           langs: ['tamil', 'malayalam', 'hindi', 'telugu', 'kannada', 'marathi', 'assamese', 'gujarati', 'oriya', 'chhattisgarhi'] },
+  { flag: '🇧🇩', name: 'Bangladesh',      langs: ['bengali'] },
+  { flag: '🇳🇵', name: 'Nepal',           langs: ['nepali'] },
+  { flag: '🇵🇰', name: 'Pakistan',        langs: ['urdu'] },
   { flag: '🇰🇷', name: 'South Korea',     langs: ['korean'] },
   { flag: '🇯🇵', name: 'Japan',           langs: ['japanese'] },
   { flag: '🇨🇳', name: 'China',           langs: ['chinese_simplified'] },
