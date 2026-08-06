@@ -5,7 +5,8 @@ import { clsx } from 'clsx'
 import { aiApi, bibleApi } from '../utils/api'
 import { useAppStore } from '../store/useAppStore'
 import chapterCache from '../utils/chapterCache'
-import { SpeechRecognition as NativeSpeech } from '@capacitor-community/speech-recognition'
+import { VoiceRecorder } from 'capacitor-voice-recorder'
+import { voiceApi } from '../utils/api'
 
 // ── Book lookup (key = lowercase, no spaces/symbols) ────────────────────────
 const BOOK_MAP: Record<string, number> = {
@@ -455,10 +456,21 @@ function tryAllAlternatives(texts: string[]): { ref: ParsedRef | null; heard: st
   return { ref: null, heard: texts[0] || '' }
 }
 
+const LANG_TO_BCP47: Record<string, string> = {
+  english: 'en-IN', tamil: 'ta-IN', malayalam: 'ml-IN', hindi: 'hi-IN',
+  telugu: 'te-IN', kannada: 'kn-IN', marathi: 'mr-IN', assamese: 'as-IN',
+  bengali: 'bn-IN', gujarati: 'gu-IN', nepali: 'ne-NP', oriya: 'or-IN',
+  urdu: 'ur-PK', chhattisgarhi: 'hi-IN', swahili: 'sw-TZ', shona: 'sn-ZW',
+  french: 'fr-FR', portuguese: 'pt-BR', spanish: 'es-ES', german: 'de-DE',
+  chinese: 'zh-CN', japanese: 'ja-JP', korean: 'ko-KR', arabic: 'ar-SA',
+  russian: 'ru-RU', indonesian: 'id-ID', thai: 'th-TH', vietnamese: 'vi-VN',
+}
+
 export default function VoiceFab() {
-  const sheetOpen = useAppStore((s) => s.sheetOpen)
-  const [listening, setListening]   = useState(false)
-  const [aiThinking, setAiThinking] = useState(false)
+  const { sheetOpen, language } = useAppStore((s) => ({ sheetOpen: s.sheetOpen, language: s.language }))
+  const [listening, setListening]       = useState(false)
+  const [isTranscribing, setIsTranscribing] = useState(false)
+  const [aiThinking, setAiThinking]   = useState(false)
   const [heard, setHeard]           = useState('')
   const [matched, setMatched]       = useState<ParsedRef | null>(null)
   const [error, setError]           = useState<string | null>(null)
@@ -477,14 +489,10 @@ export default function VoiceFab() {
 
   // Guard: prevents callbacks from navigating after panel is closed
   const panelOpen = useRef(false)
-  // Guard: prevents concurrent tryAIParse calls
   const aiParsing = useRef(false)
-  // Guard: native listener cleanup
-  const nativeListenerRef = useRef<{ remove: () => void } | null>(null)
 
   useEffect(() => () => {
-    NativeSpeech.stop().catch(() => {})
-    nativeListenerRef.current?.remove()
+    VoiceRecorder.stopRecording().catch(() => {})
     clearTimer()
   }, [])
 
@@ -494,10 +502,9 @@ export default function VoiceFab() {
 
   function closePanel() {
     panelOpen.current = false
-    NativeSpeech.stop().catch(() => {})
-    nativeListenerRef.current?.remove()
-    nativeListenerRef.current = null
+    VoiceRecorder.stopRecording().catch(() => {})
     setListening(false)
+    setIsTranscribing(false)
     setAiThinking(false)
     setShowPanel(false)
     setHeard('')
@@ -525,123 +532,86 @@ export default function VoiceFab() {
     setMatched(null)
     setManualText('')
 
-    // Stop any previous session
-    await NativeSpeech.stop().catch(() => {})
-    nativeListenerRef.current?.remove()
-    nativeListenerRef.current = null
-
-    // Check availability
-    const avail = await NativeSpeech.available().catch(() => ({ available: false }))
-    if (!avail.available) {
-      setError('Speech recognition is not available on this device. Please type below.')
+    // Check if device can record
+    const canRecord = await VoiceRecorder.canDeviceVoiceRecord().catch(() => ({ value: false }))
+    if (!canRecord.value) {
+      setError('Audio recording is not available on this device. Please type below.')
       setTimeout(() => inputRef.current?.focus(), 100)
       return
     }
 
-    // Request permission
-    let perm = await NativeSpeech.checkPermissions().catch(() => null)
-    if (perm?.speechRecognition !== 'granted') {
-      perm = await NativeSpeech.requestPermissions().catch(() => null)
+    // Request microphone permission
+    const perm = await VoiceRecorder.requestAudioRecordingPermission().catch(() => ({ value: false }))
+    if (!perm.value) {
+      setError('Microphone blocked.\n\niOS: Settings → Tamil English AI Bible → Microphone → Enable\nAndroid: Settings → Apps → Tamil English AI Bible → Permissions → Microphone → Allow')
+      setTimeout(() => inputRef.current?.focus(), 100)
+      return
     }
-    if (perm?.speechRecognition !== 'granted') {
-      setError('Microphone blocked.\n\niPhone: Settings → Tamil English AI Bible → Microphone & Speech Recognition → Enable')
+
+    try {
+      await VoiceRecorder.startRecording()
+    } catch {
+      setError('Could not start microphone. Please check permissions in Settings.')
       setTimeout(() => inputRef.current?.focus(), 100)
       return
     }
 
     setListening(true)
+    // Auto-stop after 8s
+    timerRef.current = setTimeout(() => { if (panelOpen.current) stopAndTranscribe() }, 8000)
+  }
 
-    const lastHeard = { text: '' }
-    let processed = false
-    const startedAt = Date.now()
-    let debounceTimer: ReturnType<typeof setTimeout> | null = null
+  async function stopAndTranscribe() {
+    clearTimer()
+    setListening(false)
+    setIsTranscribing(true)
 
-    function clearDebounce() {
-      if (debounceTimer) { clearTimeout(debounceTimer); debounceTimer = null }
-    }
+    try {
+      const result = await VoiceRecorder.stopRecording()
+      const { recordDataBase64, mimeType } = result.value
 
-    function processResult() {
-      if (processed || !panelOpen.current) return
-      clearDebounce()
-      processed = true
-      clearTimer()
-      setListening(false)
-      const text = lastHeard.text.trim()
-      if (!text) {
-        const elapsed = Date.now() - startedAt
-        if (elapsed < 2000) {
-          setError('Speech recognition failed to initialize.\n\nThis feature requires a real iPhone — it does not work in the iOS Simulator.')
-        } else {
-          setError('Nothing heard. Speak clearly after tapping the mic.')
-        }
+      if (!recordDataBase64) {
+        setIsTranscribing(false)
+        setError('Nothing recorded. Speak clearly and try again.')
         setTimeout(() => inputRef.current?.focus(), 100)
         return
       }
-      const { ref, heard: h } = tryAllAlternatives([text])
-      setHeard(h)
+
+      // Convert base64 to Blob and send to Whisper
+      const binary = atob(recordDataBase64)
+      const bytes = new Uint8Array(binary.length)
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+      const audioBlob = new Blob([bytes], { type: mimeType || 'audio/aac' })
+
+      const res = await voiceApi.transcribe(audioBlob, mimeType)
+      const text = (res.data?.text ?? '').trim()
+
+      if (!text) {
+        setIsTranscribing(false)
+        setError('Nothing heard. Speak clearly and try again.')
+        setTimeout(() => inputRef.current?.focus(), 100)
+        return
+      }
+
+      setHeard(text)
+      setIsTranscribing(false)
+
+      if (!panelOpen.current) return
+
+      // Try instant local parse first
+      const { ref } = tryAllAlternatives([text])
       if (ref) {
         setMatched(ref)
         goNavigate(ref)
       } else {
-        // Skip AI parse (2-5s latency) — go directly to instant text search
         goSearch(text)
       }
-    }
-
-    // Show live transcription as the user speaks
-    // Debounce: if no new partial result for 800ms, user has stopped — process immediately
-    // instead of waiting for iOS silence detection (~1.5-3s delay)
-    const partialListener = await NativeSpeech.addListener('partialResults', (data: { matches: string[] }) => {
-      if (!panelOpen.current) return
-      const t = data.matches?.[0] ?? ''
-      if (t) {
-        lastHeard.text = t
-        setHeard(t)
-        clearDebounce()
-        debounceTimer = setTimeout(() => {
-          if (!processed && panelOpen.current) {
-            NativeSpeech.stop().catch(() => {})
-            // Give listeningState 300ms to fire normally; force if it doesn't
-            setTimeout(() => { if (!processed) processResult() }, 300)
-          }
-        }, 1200)
-      }
-    })
-
-    // Triggered when recognition ends (user stopped speaking / auto-stop)
-    const stateListener = await NativeSpeech.addListener('listeningState', (data: { status: string }) => {
-      if (data.status === 'stopped') {
-        clearDebounce()
-        partialListener.remove()
-        stateListener.remove()
-        nativeListenerRef.current = null
-        processResult()
-      }
-    })
-
-    nativeListenerRef.current = { remove: () => { clearDebounce(); partialListener.remove(); stateListener.remove() } }
-
-    try {
-      await NativeSpeech.start({ language: 'en-IN', maxResults: 5, partialResults: true, popup: false })
     } catch {
-      if (!processed) {
-        partialListener.remove()
-        stateListener.remove()
-        nativeListenerRef.current = null
-        setListening(false)
-        setError('Could not start microphone. Please check permissions in Settings.')
-        setTimeout(() => inputRef.current?.focus(), 100)
-      }
-      return
+      setIsTranscribing(false)
+      if (!panelOpen.current) return
+      setError('Transcription failed. Check your internet connection and try again.')
+      setTimeout(() => inputRef.current?.focus(), 100)
     }
-
-    // Auto-stop after 15s of no speech
-    timerRef.current = setTimeout(async () => {
-      if (!processed && panelOpen.current) {
-        await NativeSpeech.stop().catch(() => {})
-        setTimeout(() => { if (!processed) { processResult() } }, 500)
-      }
-    }, 15000)
   }
 
   async function tryAIParse(text: string) {
@@ -739,21 +709,27 @@ export default function VoiceFab() {
             {/* Mic button */}
             <div className="flex justify-center mb-3">
               <button
-                onClick={listening ? () => NativeSpeech.stop().catch(() => {}) : startListening}
+                onClick={listening ? stopAndTranscribe : startListening}
+                disabled={isTranscribing}
                 className={clsx(
                   'w-16 h-16 rounded-full flex items-center justify-center transition-all shadow-lg',
                   listening
                     ? 'bg-red-500 mic-recording shadow-red-300'
+                    : isTranscribing
+                    ? 'bg-gray-400 cursor-wait'
                     : 'bg-maroon-700 hover:bg-maroon-800'
                 )}
               >
-                <Mic className="h-7 w-7 text-white" />
+                {isTranscribing
+                  ? <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  : <Mic className="h-7 w-7 text-white" />
+                }
               </button>
             </div>
 
             {/* Hint */}
             <p className="text-center text-xs text-gray-500 mb-1">
-              {listening ? '🎙 Listening… speak now' : 'Tap mic and speak, or type below'}
+              {isTranscribing ? '✨ Understanding your speech…' : listening ? '🎙 Recording… tap to stop' : 'Tap mic and speak, or type below'}
             </p>
             <div className="bg-cream-50 rounded-xl px-3 py-2 mb-3 space-y-1">
               <p className="text-xs text-gray-500 font-medium">Try saying:</p>

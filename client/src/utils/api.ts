@@ -68,9 +68,10 @@ export const aiApi = {
 }
 
 export const voiceApi = {
-  transcribe: (audioBlob: Blob) => {
+  transcribe: (audioBlob: Blob, mimeType?: string) => {
     const form = new FormData()
-    form.append('audio', audioBlob, 'recording.webm')
+    const ext = mimeType?.includes('wav') ? 'wav' : mimeType?.includes('mp4') ? 'mp4' : 'aac'
+    form.append('audio', audioBlob, `recording.${ext}`)
     return api.post('/voice/transcribe', form, { headers: { 'Content-Type': 'multipart/form-data' } })
   },
   parse: (text: string) => api.post('/voice/parse', { text }),

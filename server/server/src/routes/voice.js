@@ -30,9 +30,10 @@ router.post('/transcribe', upload.single('audio'), async (req, res) => {
     const transcription = await client.audio.transcriptions.create({
       file: fs.createReadStream(req.file.path),
       model: 'whisper-1',
-      language: 'en', // handles both Tamil and English
+      response_format: 'verbose_json',
+      // No language lock — Whisper auto-detects any of 100+ languages
     })
-    res.json({ text: transcription.text })
+    res.json({ text: transcription.text, language: transcription.language })
   } catch (err) {
     res.status(500).json({ error: 'Transcription failed', detail: err.message })
   } finally {
@@ -56,10 +57,19 @@ router.post('/parse', async (req, res) => {
       messages: [
         {
           role: 'user',
-          content: `You are a Bible reference parser. Extract the book name, chapter number, and verse number from this text (which may be in Tamil, English, or mixed): '${text}'
-Return ONLY valid JSON: {"book_name_english": "...", "chapter_no": 1, "verse_no": null, "confidence_score": 0.0}
-If verse not mentioned, return verse_no: null.
-If unsure, return top_matches: [{"book_name_english": "...", "chapter_no": 1, "verse_no": null, "confidence": 0.0}] with confidence_score: 0.0`,
+          content: `You are a Bible reference parser supporting 57 languages including Tamil, Hindi, Malayalam, Telugu, Kannada, Marathi, Gujarati, Bengali, Assamese, Oriya, Nepali, Urdu, Swahili, Shona, French, Spanish, Portuguese, German, Chinese, Japanese, Korean, Arabic, and more. The speaker may mispronounce, use phonetic spelling, mix languages, or speak with a non-native accent.
+
+Extract the Bible book, chapter, and verse from: '${text}'
+
+Examples:
+- "Yovaan moonru pathinaaru" → John 3:16
+- "யோவான் மூன்று பதினாறு" → John 3:16
+- "Zaburi ishirini na tatu" (Swahili) → Psalm 23
+- "the verse about love is patient" → 1 Corinthians 13:4
+- "armor of god" → Ephesians 6:11
+
+Return ONLY valid JSON: {"book_name_english": "...", "chapter_no": 1, "verse_no": null, "confidence_score": 0.95}
+If verse not mentioned set verse_no: null. If unsure set confidence_score below 0.5.`,
         },
       ],
       response_format: { type: 'json_object' },

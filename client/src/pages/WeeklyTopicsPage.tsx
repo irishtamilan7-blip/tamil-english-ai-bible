@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { ChevronLeft, Plus, Trash2, X, Check, BookOpen, Calendar, Edit3 } from 'lucide-react'
 import { useSermonStore, type SermonTopic } from '../store/useSermonStore'
@@ -73,16 +74,16 @@ export default function WeeklyTopicsPage() {
         </button>
       </div>
 
-      {/* Add / Edit form */}
-      {showForm && (
+      {/* Add / Edit form — rendered in a portal so iOS overflow-y:auto on <main> doesn't clip the fixed sheet */}
+      {showForm && createPortal(
         <>
           <div className="fixed inset-0 z-40 bg-black/40" onClick={() => setShowForm(false)} />
-          <div className="fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-2xl shadow-2xl max-h-[90vh] flex flex-col">
+          <div className="fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-2xl shadow-2xl flex flex-col" style={{ maxHeight: '90dvh' }}>
             <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-cream-200 shrink-0">
               <p className="font-semibold text-gray-800">{editId ? 'Edit Sermon Topic' : 'New Sermon Topic'}</p>
               <button onClick={() => setShowForm(false)}><X className="h-5 w-5 text-gray-400" /></button>
             </div>
-            <div className="overflow-y-auto px-5 py-4 space-y-4">
+            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
               {/* Date */}
               <div>
                 <label className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1 block">Date</label>
@@ -119,7 +120,7 @@ export default function WeeklyTopicsPage() {
               <div>
                 <label className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1 block">Sermon Notes</label>
                 <textarea
-                  rows={5}
+                  rows={4}
                   placeholder="Key points, insights, personal reflections…"
                   value={form.notes}
                   onChange={(e) => setForm(f => ({ ...f, notes: e.target.value }))}
@@ -127,7 +128,7 @@ export default function WeeklyTopicsPage() {
                 />
               </div>
             </div>
-            <div className="px-5 pb-6 pt-2 shrink-0 flex gap-3">
+            <div className="px-5 pt-2 shrink-0 flex gap-3" style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))' }}>
               <button
                 onClick={save}
                 disabled={!form.title.trim()}
@@ -146,7 +147,8 @@ export default function WeeklyTopicsPage() {
               </button>
             </div>
           </div>
-        </>
+        </>,
+        document.body
       )}
 
       {/* Empty state */}

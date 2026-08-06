@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Rounded background -->
+  <rect width="512" height="512" rx="110" fill="#7B1C1C"/>
+  <!-- Left page of open Bible -->
+  <path d="M96 152 Q96 136 112 136 L248 148 L248 376 L112 364 Q96 364 96 348 Z" fill="#FDF6EC"/>
+  <!-- Right page -->
+  <path d="M416 152 Q416 136 400 136 L264 148 L264 376 L400 364 Q416 364 416 348 Z" fill="#F5EDD8"/>
+  <!-- Spine -->
+  <rect x="246" y="136" width="20" height="240" rx="5" fill="#C9A84C"/>
+  <!-- Lines on left page -->
+  <rect x="120" y="184" width="108" height="9" rx="4.5" fill="#7B1C1C" opacity="0.22"/>
+  <rect x="120" y="206" width="92" height="9" rx="4.5" fill="#7B1C1C" opacity="0.22"/>
+  <rect x="120" y="228" width="104" height="9" rx="4.5" fill="#7B1C1C" opacity="0.22"/>
+  <rect x="120" y="250" width="88" height="9" rx="4.5" fill="#7B1C1C" opacity="0.22"/>
+  <rect x="120" y="272" width="100" height="9" rx="4.5" fill="#7B1C1C" opacity="0.22"/>
+  <rect x="120" y="294" width="80" height="9" rx="4.5" fill="#7B1C1C" opacity="0.22"/>
+  <rect x="120" y="316" width="96" height="9" rx="4.5" fill="#7B1C1C" opacity="0.22"/>
+  <!-- Lines on right page -->
+  <rect x="278" y="184" width="112" height="9" rx="4.5" fill="#7B1C1C" opacity="0.17"/>
+  <rect x="278" y="206" width="96" height="9" rx="4.5" fill="#7B1C1C" opacity="0.17"/>
+  <rect x="278" y="228" width="108" height="9" rx="4.5" fill="#7B1C1C" opacity="0.17"/>
+  <rect x="278" y="250" width="90" height="9" rx="4.5" fill="#7B1C1C" opacity="0.17"/>
+  <rect x="278" y="272" width="104" height="9" rx="4.5" fill="#7B1C1C" opacity="0.17"/>
+  <rect x="278" y="294" width="84" height="9" rx="4.5" fill="#7B1C1C" opacity="0.17"/>
+  <rect x="278" y="316" width="100" height="9" rx="4.5" fill="#7B1C1C" opacity="0.17"/>
+  <!-- Gold cross on spine area -->
+  <rect x="249" y="200" width="14" height="60" rx="5" fill="#C9A84C" opacity="0.9"/>
+  <rect x="238" y="218" width="36" height="14" rx="5" fill="#C9A84C" opacity="0.9"/>
+  <!-- Sound wave dots (voice) -->
+  <circle cx="256" cy="432" r="8" fill="#C9A84C" opacity="0.9"/>
+  <circle cx="232" cy="432" r="8" fill="#C9A84C" opacity="0.6"/>
+  <circle cx="280" cy="432" r="8" fill="#C9A84C" opacity="0.6"/>
+  <circle cx="208" cy="432" r="8" fill="#C9A84C" opacity="0.3"/>
+  <circle cx="304" cy="432" r="8" fill="#C9A84C" opacity="0.3"/>
+</svg>

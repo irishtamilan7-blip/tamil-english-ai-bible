@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">BibleVoice</string>
+    <string name="title_activity_main">BibleVoice</string>
+    <string name="package_name">com.biblevoice.app</string>
+    <string name="custom_url_scheme">com.biblevoice.app</string>
+</resources>
