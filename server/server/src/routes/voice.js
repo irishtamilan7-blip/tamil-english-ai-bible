@@ -18,6 +18,31 @@ function getOpenAI() {
   return openai
 }
 
+// POST /api/voice/transcribe-b64 — base64 audio → text via Whisper
+router.post('/transcribe-b64', async (req, res) => {
+  const { audio, mimeType } = req.body
+  if (!audio) return res.status(400).json({ error: 'No audio provided' })
+
+  const client = getOpenAI()
+  if (!client) return res.status(503).json({ error: 'OpenAI API key not configured' })
+
+  const ext = (mimeType || '').includes('wav') ? 'wav' : 'aac'
+  const tmpFile = path.join(tmpDir, `${Date.now()}.${ext}`)
+  try {
+    fs.writeFileSync(tmpFile, Buffer.from(audio, 'base64'))
+    const transcription = await client.audio.transcriptions.create({
+      file: fs.createReadStream(tmpFile),
+      model: 'whisper-1',
+      response_format: 'verbose_json',
+    })
+    res.json({ text: transcription.text, language: transcription.language })
+  } catch (err) {
+    res.status(500).json({ error: 'Transcription failed', detail: err.message })
+  } finally {
+    if (fs.existsSync(tmpFile)) fs.unlinkSync(tmpFile)
+  }
+})
+
 // POST /api/voice/transcribe — audio → text via Whisper
 router.post('/transcribe', upload.single('audio'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No audio file provided' })

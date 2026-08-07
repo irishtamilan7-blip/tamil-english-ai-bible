@@ -577,13 +577,8 @@ export default function VoiceFab() {
         return
       }
 
-      // Convert base64 to Blob and send to Whisper
-      const binary = atob(recordDataBase64)
-      const bytes = new Uint8Array(binary.length)
-      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
-      const audioBlob = new Blob([bytes], { type: mimeType || 'audio/aac' })
-
-      const res = await voiceApi.transcribe(audioBlob, mimeType)
+      // Send base64 directly as JSON — avoids CapacitorHttp binary upload issue
+      const res = await voiceApi.transcribe(recordDataBase64, mimeType)
       const text = (res.data?.text ?? '').trim()
 
       if (!text) {

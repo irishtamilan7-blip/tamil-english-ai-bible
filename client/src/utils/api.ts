@@ -68,11 +68,7 @@ export const aiApi = {
 }
 
 export const voiceApi = {
-  transcribe: (audioBlob: Blob, mimeType?: string) => {
-    const form = new FormData()
-    const ext = mimeType?.includes('wav') ? 'wav' : mimeType?.includes('mp4') ? 'mp4' : 'aac'
-    form.append('audio', audioBlob, `recording.${ext}`)
-    return api.post('/voice/transcribe', form, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 30000 })
-  },
+  transcribe: (base64: string, mimeType?: string) =>
+    api.post('/voice/transcribe-b64', { audio: base64, mimeType: mimeType || 'audio/aac' }, { timeout: 30000 }),
   parse: (text: string) => api.post('/voice/parse', { text }),
 }
