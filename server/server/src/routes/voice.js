@@ -5,7 +5,9 @@ const OpenAI = require('openai')
 const fs = require('fs')
 const path = require('path')
 
-const upload = multer({ dest: '/tmp/bv-audio/' })
+const tmpDir = '/tmp/bv-audio/'
+if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true })
+const upload = multer({ dest: tmpDir })
 
 // Lazy init OpenAI client
 let openai = null

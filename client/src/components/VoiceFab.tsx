@@ -521,8 +521,8 @@ export default function VoiceFab() {
     setHeard('')
     setMatched(null)
     setManualText('')
-    // Focus text input — do NOT auto-start mic so user can choose when to speak
-    setTimeout(() => inputRef.current?.focus(), 200)
+    // Auto-start recording so user can speak immediately without tapping mic
+    setTimeout(() => startListening(), 300)
   }
 
   async function startListening() {
