@@ -3,7 +3,7 @@ const router  = express.Router()
 const { getChapter } = require('../data/loader')
 
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions'
-const MODEL    = 'llama-3.3-70b-versatile'
+const MODEL    = 'openai/gpt-oss-20b'
 
 const SYSTEM_PROMPT = `You are a helpful Bible assistant for BibleVoice, a Tamil & English Bible app for Indian Christians.
 
